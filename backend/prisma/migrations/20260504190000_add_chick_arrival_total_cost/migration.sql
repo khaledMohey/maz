@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "ChickArrival" ADD COLUMN IF NOT EXISTS "totalCost" DECIMAL(14,2) NOT NULL DEFAULT 0;

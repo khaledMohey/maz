@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "Feed" ADD COLUMN     "pricePerTon" DECIMAL(12,2) NOT NULL DEFAULT 0,
+ADD COLUMN     "quantity" DECIMAL(10,2) NOT NULL DEFAULT 0,
+ADD COLUMN     "unitType" TEXT NOT NULL DEFAULT 'bags';

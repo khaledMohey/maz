@@ -1,0 +1,3 @@
+# يُنسخ إلى dist مع البناء — يجب أن يطابق netlify.toml عند النشر اليدوي
+/api/*  https://mazr3a-backend.fly.dev/api/:splat  200
+/*  /index.html  200

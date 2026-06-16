@@ -1,0 +1,333 @@
+@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;600;700;800&display=swap');
+
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Tajawal', ui-sans-serif, system-ui, sans-serif;
+  --color-brand-50: #f0fdfa;
+  --color-brand-100: #ccfbf1;
+  --color-brand-500: #14b8a6;
+  --color-brand-600: #0d9488;
+  --color-brand-700: #0f766e;
+  --color-brand-800: #115e59;
+  --color-table-header: #f1f5f9;
+  --color-table-stripe: rgba(248, 250, 252, 0.92);
+  --color-table-hover: rgba(240, 253, 250, 0.65);
+}
+
+@layer base {
+  :root {
+    --app-radius-lg: 1.25rem;
+    --app-radius-xl: 1.5rem;
+    --app-shadow-card: 0 1px 2px rgb(15 23 42 / 0.04), 0 4px 24px -4px rgb(15 23 42 / 0.08);
+    --app-shadow-card-hover: 0 4px 12px rgb(15 23 42 / 0.06), 0 12px 40px -8px rgb(15 23 42 / 0.12);
+    --app-shadow-float: 0 8px 26px -10px rgb(15 23 42 / 0.22);
+  }
+
+  html {
+    @apply scroll-smooth;
+  }
+
+  body {
+    @apply min-h-screen bg-slate-50 font-sans text-slate-800 antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: rgba(148, 163, 184, 0.15);
+    border-radius: 999px;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: rgba(100, 116, 139, 0.35);
+    border-radius: 999px;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: rgba(71, 85, 105, 0.5);
+  }
+}
+
+@keyframes app-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes app-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes app-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@layer utilities {
+  .animate-app-in {
+    animation: app-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+}
+
+@layer components {
+  .app-shell {
+    @apply relative bg-slate-50 text-slate-900;
+    background-image:
+      radial-gradient(1200px 520px at 12% -8%, rgba(20, 184, 166, 0.12), transparent 55%),
+      radial-gradient(900px 420px at 92% 0%, rgba(99, 102, 241, 0.06), transparent 50%);
+  }
+
+  .app-page {
+    @apply mx-auto w-full max-w-7xl px-4 py-8 sm:px-5 md:px-8 md:py-10;
+  }
+
+  .app-page-hero {
+    @apply w-full;
+  }
+
+  .app-content {
+    @apply w-full;
+  }
+
+  .app-eyebrow {
+    @apply text-xs font-bold uppercase tracking-wide text-teal-700;
+  }
+
+  .app-title-page {
+    @apply text-2xl font-extrabold tracking-tight text-slate-900 sm:text-3xl;
+  }
+
+  .app-lead {
+    @apply text-sm font-medium text-slate-600 sm:text-base;
+  }
+
+  .app-muted {
+    @apply text-sm text-slate-600;
+  }
+
+  .app-panel-title {
+    @apply text-xs font-bold uppercase tracking-wide text-teal-700;
+  }
+
+  .app-panel-heading {
+    @apply text-lg font-extrabold text-slate-900 sm:text-xl;
+  }
+
+  .app-badge {
+    @apply inline-flex items-center rounded-full border border-teal-200/80 bg-teal-50 px-3 py-1 text-xs font-bold text-teal-800;
+  }
+
+  .app-empty {
+    @apply rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-8 text-center text-sm font-medium text-slate-500;
+  }
+
+  .app-card {
+    @apply rounded-2xl border border-slate-200/80 bg-white/95 shadow-md shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.03] backdrop-blur-md transition-all duration-300;
+    box-shadow: var(--app-shadow-card);
+  }
+
+  .app-card:hover {
+    box-shadow: var(--app-shadow-card-hover);
+  }
+
+  .app-card-soft {
+    @apply rounded-2xl border border-slate-200/70 bg-white/90 shadow-sm shadow-slate-900/[0.03] ring-1 ring-slate-900/[0.02] backdrop-blur-md transition-all duration-300;
+  }
+
+  .app-stat-card {
+    @apply rounded-2xl border border-slate-200/80 bg-white/95 p-4 shadow-md shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.02] backdrop-blur-md sm:p-5;
+  }
+
+  .app-toolbar {
+    @apply mb-8 rounded-2xl border border-slate-200/80 bg-white/95 p-4 shadow-md shadow-slate-900/[0.04] ring-1 ring-slate-900/[0.03] backdrop-blur-md md:p-5;
+    background-image: linear-gradient(180deg, rgba(240, 253, 250, 0.35) 0%, rgba(255, 255, 255, 0.95) 55%);
+  }
+
+  .app-input {
+    @apply w-full rounded-xl border border-slate-200/90 bg-white px-3 py-2.5 text-sm font-medium text-slate-900 shadow-inner shadow-slate-900/[0.02] outline-none transition focus:border-teal-400/80 focus:ring-2 focus:ring-teal-500/25;
+  }
+
+  .app-input-sm {
+    @apply rounded-lg px-2.5 py-2 text-xs;
+  }
+
+  .app-btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-teal-600/90 bg-gradient-to-b from-teal-500 to-teal-700 px-4 py-2.5 text-sm font-bold text-white shadow-md shadow-teal-900/15 transition hover:from-teal-500 hover:to-teal-800 hover:shadow-lg active:scale-[0.99] disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  .app-btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-800 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 active:scale-[0.99] disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  .app-btn-outline {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200/90 bg-white px-4 py-2.5 text-sm font-bold text-slate-800 shadow-sm transition hover:border-teal-300/70 hover:bg-teal-50/40 active:scale-[0.99] disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  .app-btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-transparent bg-transparent px-3 py-2 text-sm font-bold text-slate-700 transition hover:border-slate-200 hover:bg-slate-50 active:scale-[0.99];
+  }
+
+  .app-btn-accent {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-amber-300/80 bg-gradient-to-b from-amber-50 to-amber-100/90 px-4 py-2.5 text-sm font-bold text-amber-950 shadow-sm transition hover:border-amber-400 hover:shadow-md active:scale-[0.99] disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  .app-btn-danger {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-rose-500/80 bg-gradient-to-b from-rose-500 to-rose-700 px-4 py-2.5 text-sm font-bold text-white shadow-md shadow-rose-900/15 transition hover:from-rose-500 hover:to-rose-800 hover:shadow-lg active:scale-[0.99] disabled:pointer-events-none disabled:opacity-50;
+  }
+
+  .app-btn-xs-edit {
+    @apply rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-bold text-teal-800 shadow-sm transition hover:border-teal-300 hover:bg-teal-50;
+  }
+
+  .app-btn-xs-delete {
+    @apply rounded-lg border border-rose-200/90 bg-white px-2 py-1 text-xs font-bold text-rose-700 shadow-sm transition hover:border-rose-300 hover:bg-rose-50;
+  }
+
+  .app-nav-link {
+    @apply rounded-xl border border-slate-200/80 bg-white/80 px-3 py-2 text-xs font-bold text-slate-800 shadow-sm backdrop-blur-sm transition hover:border-teal-300/60 hover:bg-teal-50/50 sm:text-sm;
+  }
+
+  .app-nav-link--primary {
+    @apply border-teal-300/80 bg-gradient-to-b from-teal-50 to-white text-teal-900 hover:border-teal-400;
+  }
+
+  .app-banner-offline {
+    @apply mt-3 rounded-xl border bg-amber-50 px-4 py-3 text-center text-sm font-semibold text-amber-950;
+  }
+
+  .app-banner-error {
+    @apply mt-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-center text-sm font-semibold text-rose-900;
+  }
+
+  .app-table-wrap {
+    @apply overflow-x-auto rounded-2xl border border-slate-200/90 bg-white shadow-lg shadow-slate-900/5;
+  }
+
+  .app-table-wrap table {
+    @apply w-full min-w-[520px] border-collapse text-right text-sm;
+  }
+
+  .app-table-wrap thead th {
+    @apply sticky top-0 z-[2] whitespace-nowrap border-b-2 border-slate-200/95 bg-gradient-to-b from-slate-100 via-slate-50/98 to-slate-100/90 px-3 py-3.5 text-xs font-extrabold tracking-wide text-slate-700 shadow-[inset_0_-1px_0_0_rgba(148,163,184,0.22)] sm:px-4 sm:text-[0.8125rem];
+  }
+
+  .app-table-wrap tbody td {
+    @apply border-b border-slate-100 px-3 py-2.5 align-middle tabular-nums text-slate-800 sm:px-4;
+  }
+
+  .app-table-wrap tbody tr:nth-child(even) td {
+    background-color: var(--color-table-stripe);
+  }
+
+  .app-table-wrap tbody tr:hover td {
+    background-color: var(--color-table-hover);
+  }
+
+  .app-table-wrap--scroll-y {
+    @apply max-h-[min(70vh,560px)] overflow-y-auto;
+  }
+
+  .app-modal-overlay {
+    @apply fixed inset-0 z-50 flex items-end justify-center bg-slate-900/45 p-4 backdrop-blur-sm sm:items-center;
+  }
+
+  .app-modal {
+    @apply w-full max-w-lg rounded-2xl border border-slate-200/90 bg-white p-5 shadow-2xl shadow-slate-900/20 ring-1 ring-slate-900/[0.04];
+  }
+
+  .app-modal-title {
+    @apply text-lg font-extrabold text-slate-900;
+  }
+
+  .app-spinner {
+    @apply h-10 w-10 rounded-full border-2 border-slate-200 border-t-teal-600;
+    animation: app-spin 0.75s linear infinite;
+  }
+
+  .app-skeleton {
+    @apply relative overflow-hidden bg-slate-200/80;
+  }
+
+  .app-skeleton::after {
+    content: '';
+    @apply pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/60 to-transparent;
+    animation: app-shimmer 1.2s ease-in-out infinite;
+  }
+
+  .app-fab-install {
+    @apply fixed bottom-5 left-5 z-50 flex items-center gap-2 rounded-full border border-teal-200/90 bg-gradient-to-b from-teal-500 to-teal-700 px-4 py-3 text-sm font-bold text-white shadow-xl shadow-teal-900/25 transition hover:shadow-2xl active:scale-[0.98] sm:bottom-8 sm:left-8;
+    pointer-events: auto;
+  }
+
+  .ledger-sheet-table {
+    border-collapse: collapse;
+  }
+
+  .ledger-sheet-table thead th {
+    @apply border border-teal-800/35 bg-teal-50 font-bold text-slate-900;
+  }
+
+  .ledger-sheet-table tbody td {
+    @apply border border-slate-300/90 align-middle;
+  }
+
+  .ledger-sheet-table tfoot td {
+    @apply border border-teal-800/40 bg-emerald-100 font-bold text-slate-900;
+  }
+
+  #farm-section-logs,
+  #farm-section-consumption,
+  #farm-section-fuel,
+  #farm-section-weight,
+  #farm-section-inventory,
+  #farm-section-treasury,
+  #farm-section-suppliers,
+  #farm-section-trading,
+  #farm-section-sales,
+  #farm-section-workers,
+  #farm-section-medication,
+  #farm-section-expenses,
+  #farm-section-chicks,
+  #farm-section-mortality,
+  #farm-section-feed {
+    @apply rounded-2xl ring-1 ring-teal-900/[0.04];
+  }
+}
+
+@media print {
+  .app-shell::before,
+  .app-shell::after {
+    display: none !important;
+  }
+
+  .app-nav,
+  .app-footer,
+  .app-fab-install {
+    display: none !important;
+  }
+
+  .app-shell {
+    background: white !important;
+  }
+
+  .app-card,
+  .app-card-soft,
+  .app-stat-card,
+  .app-toolbar {
+    box-shadow: none !important;
+    background: white !important;
+  }
+}

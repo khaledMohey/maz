@@ -1,0 +1,22 @@
+# ربط الريبو بـ Netlify → يقرأ الملف تلقائيًا.
+#
+# خيار (أ): Netlify → Environment → VITE_API_BASE_URL = https://رابط-render (بدون / آخر)
+# خيار (ب): استبدل YOUR-SERVICE في سطر to أدناه باسم خدمة Render، واحذف/اترك VITE فاضي
+#           عشان الطلبات تروح /api على نفس دومين Netlify وتُوجَّه للـ backend.
+
+[build]
+  base = "frontend"
+  command = "npm run build"
+  # المسار نسبةً لجذر الريبو؛ الأمر يُنفَّذ داخل `base` لكن الناتج في frontend/dist
+  publish = "frontend/dist"
+
+[[redirects]]
+  from = "/api/*"
+  to = "https://mazr3a-backend.fly.dev/api/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

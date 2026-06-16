@@ -1,0 +1,24 @@
+ما أقدرش أنفّذ تسجيل الدخول على Supabase/Render/Netlify بدالك — دي خطواتك فقط (٥ دقائق):
+
+(1) Supabase
+  - أنشئ مشروع → Settings → Database → انسخ Connection URI (بعد Reveal).
+  - لا ترسل الرابط في الشات.
+
+(2) GitHub
+  - ادفع هذا الريبو (مع netlify.toml و render.yaml).
+
+(3) Render
+  - New → Blueprint → اختر الريبو.
+  - في الخدمة mazr3a-backend → Environment → DATABASE_URL = الصق الـ URI.
+  - Deploy. انسخ الرابط العام (https://....onrender.com).
+
+(4) Netlify (موقعك الحالي)
+  - Site configuration → Environment variables:
+      VITE_API_BASE_URL = نفس رابط Render (بدون / في النهاية)
+  - Deploys → Clear cache and deploy.
+
+(5) اختبار
+  - افتح: رابط-Render/health  → لازم ok.
+  - افتح موقع Netlify → جرّب التطبيق.
+
+لو حذفت بروكسي /api من netlify.toml: لازم VITE_API_BASE_URL (كما في الخطوة 4).

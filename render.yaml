@@ -1,0 +1,13 @@
+# Render → New → Blueprint واربط نفس الريبو.
+# Environment (في لوحة الخدمة):
+#   DATABASE_URL = نسخ URI من Supabase (Database → Connection string)
+# اختياري: FARM_CREATE_PASSWORD
+
+services:
+  - type: web
+    name: mazr3a-backend
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install && npx prisma generate && npx prisma migrate deploy
+    startCommand: npm start
+    healthCheckPath: /health

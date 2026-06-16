@@ -1,0 +1,450 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/client_v10"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Farm {
+  id        String   @id @default(cuid())
+  name      String
+  location  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cycles       Cycle[]
+  alerts       Alert[]
+  suppliers    Supplier[]
+  traders      Trader[]
+  brokers      Broker[]
+  partners     Partner[]
+  supervisors  Supervisor[]
+  farmWorkers  FarmWorker[]
+  treasuryEntries TreasuryEntry[]
+}
+
+model FarmWorker {
+  id        String   @id @default(cuid())
+  farmId    String
+  code      String
+  name      String
+  phone     String?
+  role      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  farm    Farm     @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  workers Worker[]
+
+  @@unique([farmId, code])
+  @@index([farmId])
+}
+
+enum PartnerShareType {
+  PERCENT
+  FIXED
+}
+
+enum TreasuryEntryType {
+  DEPOSIT
+  WITHDRAW
+  CREDIT_ADD
+  CREDIT_DEDUCT
+}
+
+model TreasuryEntry {
+  id         String            @id @default(cuid())
+  farmId     String
+  date       DateTime          @default(now())
+  type       TreasuryEntryType
+  amount     Decimal           @db.Decimal(12, 2)
+  personName String?
+  notes      String?
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+
+  @@index([farmId, date])
+  @@index([farmId, type])
+  @@index([farmId, personName])
+}
+
+model Partner {
+  id        String           @id @default(cuid())
+  farmId    String
+  name      String
+  shareType PartnerShareType
+  shareValue Decimal         @db.Decimal(12, 2)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+
+  @@index([farmId])
+}
+
+model Supervisor {
+  id        String           @id @default(cuid())
+  farmId    String
+  name      String
+  shareType PartnerShareType
+  shareValue Decimal         @db.Decimal(12, 2)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  farm Farm @relation(fields: [farmId], references: [id], onDelete: Cascade)
+
+  @@index([farmId])
+}
+
+model Supplier {
+  id        String   @id @default(cuid())
+  farmId    String
+  name      String
+  phone     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  farm  Farm   @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  feeds Feed[]
+
+  @@unique([farmId, name])
+  @@index([farmId])
+}
+
+model Trader {
+  id        String   @id @default(cuid())
+  farmId    String
+  name      String
+  phone     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  farm  Farm   @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  sales Sale[]
+
+  @@unique([farmId, name])
+  @@index([farmId])
+}
+
+model Broker {
+  id        String   @id @default(cuid())
+  farmId    String
+  name      String
+  phone     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  farm  Farm   @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  sales Sale[]
+
+  @@unique([farmId, name])
+  @@index([farmId])
+}
+
+model Cycle {
+  id           String    @id @default(cuid())
+  farmId       String
+  name         String
+  startDate    DateTime
+  endDate      DateTime?
+  initialBirds Int
+  notes        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  farm              Farm               @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  chickArrivals     ChickArrival[]
+  mortalities       Mortality[]
+  feeds             Feed[]
+  gases             Gas[]
+  solars            Solar[]
+  expenses          Expense[]
+  medications       Medication[]
+  workers           Worker[]
+  workerExpenses    WorkerExpense[]
+  sales             Sale[]
+  saleWeightEntries SaleWeightEntry[]
+  dailyConsumptions DailyConsumption[]
+  weightEntries     WeightEntry[]
+  alerts            Alert[]
+
+  @@index([farmId])
+}
+
+model WeightEntry {
+  id                 String   @id @default(cuid())
+  cycleId            String
+  date               DateTime
+  averageWeight      Decimal  @db.Decimal(10, 2)
+  /// عند وزن مجموعة فرخ معًا: العدد وإجمالي الوزن (يُحسب المتوسط = المجموع ÷ العدد)
+  groupBirdCount     Int?
+  groupTotalWeightKg Decimal? @db.Decimal(10, 2)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  cycle Cycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+
+  @@index([cycleId, date])
+}
+
+model Alert {
+  id        String   @id @default(cuid())
+  farmId    String
+  cycleId   String?
+  type      String
+  message   String
+  createdAt DateTime @default(now())
+
+  farm  Farm   @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  cycle Cycle? @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+
+  @@index([farmId, createdAt])
+  @@index([cycleId, createdAt])
+}
+
+model ChickArrival {
+  id          String   @id @default(cuid())
+  cycleId     String
+  arrivalDate DateTime
+  count       Int
+  /// إجمالي تكلفة شراء هذه الشحنة (جنيه)
+  totalCost   Decimal  @default(0) @db.Decimal(14, 2)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  cycle Cycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+
+  @@index([cycleId, arrivalDate])
+}
+
+model Mortality {
+  id        String   @id @default(cuid())
+  cycleId   String
+  date      DateTime
+  count     Int
+  reason    String?
+  /// سعر الكتكوت (محسوب) وقت تسجيل هذا النفوق — يُحفظ ولا يتغير مع تغير الأسعار لاحقًا
+  chickPriceAtRecord Decimal? @db.Decimal(14, 4)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cycle Cycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+
+  @@index([cycleId, date])
+}
+
+model Feed {
+  id          String   @id @default(cuid())
+  cycleId     String
+  date        DateTime
+  feedType    String
+  unitType    String   @default("bags")
+  quantity    Decimal  @default(0) @db.Decimal(10, 2)
+  pricePerTon Decimal  @default(0) @db.Decimal(12, 2)
+  quantityKg  Decimal  @db.Decimal(10, 2)
+  unitPrice   Decimal? @db.Decimal(10, 2)
+  totalCost   Decimal? @db.Decimal(12, 2)
+  supplier    String?
+  supplierId  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  cycle          Cycle     @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  linkedSupplier Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+
+  @@index([cycleId, date])
+  @@index([supplierId])
+}
+
+model Gas {
+  id       String   @id @default(cuid())
+  cycleId  String
+  date     DateTime
+  gasType  String?  @default("كبير")
+  count    Int?     @default(0)
+  cost     Decimal? @db.Decimal(12, 2)
+  quantity Decimal  @db.Decimal(10, 2)
+  unit     String   @default("cylinder")
+  unitPrice Decimal? @db.Decimal(10, 2)
+  totalCost Decimal? @db.Decimal(12, 2)
+  notes    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cycle Cycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+
+  @@index([cycleId, date])
+}
+
+model Solar {
+  id              String   @id @default(cuid())
+  cycleId         String
+  date            DateTime
+  liters          Decimal? @db.Decimal(12, 2)
+  cost            Decimal? @db.Decimal(12, 2)
+  kwhGenerated    Decimal? @db.Decimal(12, 2)
+  maintenanceCost Decimal? @db.Decimal(12, 2)
+  notes           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  cycle Cycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+
+  @@index([cycleId, date])
+}
+
+model Expense {
+  id        String   @id @default(cuid())
+  cycleId   String
+  date      DateTime
+  title     String
+  category  String
+  amount    Decimal  @db.Decimal(12, 2)
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cycle Cycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+
+  @@index([cycleId, date])
+}
+
+model Medication {
+  id            String   @id @default(cuid())
+  cycleId       String
+  date          DateTime
+  name          String
+  supplier      String?
+  dosage        String?
+  quantity      Decimal? @db.Decimal(10, 2)
+  usedQuantity  Decimal? @default(0) @db.Decimal(10, 2)
+  unitPrice     Decimal? @db.Decimal(10, 2)
+  totalCost     Decimal? @db.Decimal(12, 2)
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  cycle Cycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+
+  @@index([cycleId, date])
+}
+
+model Worker {
+  id            String    @id @default(cuid())
+  cycleId       String
+  name          String
+  phone         String?
+  role          String?
+  hiredAt       DateTime?
+  monthlySalary Decimal? @db.Decimal(12, 2)
+  farmWorkerId  String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  cycle          Cycle           @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  farmWorker     FarmWorker?     @relation(fields: [farmWorkerId], references: [id], onDelete: SetNull)
+  workerExpenses WorkerExpense[]
+
+  @@index([cycleId])
+  @@index([farmWorkerId])
+}
+
+model WorkerExpense {
+  id          String   @id @default(cuid())
+  cycleId     String
+  workerId    String
+  date        DateTime
+  amount      Decimal  @db.Decimal(12, 2)
+  description String?
+  /// بند الحركة: سلف، صرف، خصم، أخرى
+  category    String?  @default("صرف")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  cycle  Cycle  @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  worker Worker @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@index([cycleId, date])
+  @@index([workerId])
+}
+
+model Sale {
+  id             String   @id @default(cuid())
+  cycleId        String
+  date           DateTime
+  trader         String?
+  traderId       String?
+  broker         String?
+  brokerId       String?
+  phone          String?
+  pricePerKg     Decimal? @db.Decimal(12, 2)
+  totalNetWeight Decimal? @db.Decimal(12, 2)
+  totalAmount    Decimal? @db.Decimal(12, 2)
+  paidAmount     Decimal? @default(0) @db.Decimal(12, 2)
+  remainingAmount Decimal? @db.Decimal(12, 2)
+  customerName   String?
+  invoiceNumber  String?
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  cycle             Cycle             @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  linkedTrader      Trader?           @relation(fields: [traderId], references: [id], onDelete: SetNull)
+  linkedBroker      Broker?           @relation(fields: [brokerId], references: [id], onDelete: SetNull)
+  saleWeightEntries SaleWeightEntry[]
+
+  @@index([cycleId, date])
+  @@index([traderId])
+  @@index([brokerId])
+}
+
+model SaleWeightEntry {
+  id          String   @id @default(cuid())
+  cycleId     String
+  saleId      String
+  emptyWeight Decimal  @db.Decimal(12, 2)
+  fullWeight  Decimal  @db.Decimal(12, 2)
+  cages       Int      @default(0)
+  netWeight   Decimal  @db.Decimal(12, 2)
+  weightKg    Decimal  @db.Decimal(10, 2)
+  unitPrice   Decimal  @db.Decimal(10, 2)
+  totalPrice  Decimal  @db.Decimal(12, 2)
+  birdCount   Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  cycle Cycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  sale  Sale  @relation(fields: [saleId], references: [id], onDelete: Cascade)
+
+  @@index([cycleId])
+  @@index([saleId])
+}
+
+model DailyConsumption {
+  id             String   @id @default(cuid())
+  cycleId        String
+  date           DateTime
+  feedKg         Decimal? @db.Decimal(10, 2)
+  consumptionBags Decimal? @db.Decimal(10, 2)
+  waterLiters    Decimal? @db.Decimal(12, 2)
+  gasUsed        Decimal? @db.Decimal(10, 2)
+  electricityKwh Decimal? @db.Decimal(10, 2)
+  notes          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  cycle Cycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+
+  @@unique([cycleId, date])
+  @@index([cycleId, date])
+}
