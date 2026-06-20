@@ -190,7 +190,10 @@ function collectTraderSalesRows(trader, cycles) {
   for (const cy of cycles || []) {
     for (const s of cy.sales || []) {
       if (s.traderId === trader.id || (!s.traderId && (s.trader || "") === trader.name)) {
-        rows.push({ ...s, cycleName: cy.name, cycleEnded: !!cy.endDate });
+        const entries = s.saleWeightEntries || [];
+        const emptyWeight = entries.reduce((sum, e) => sum + Number(e.emptyWeight || 0), 0);
+        const fullWeight = entries.reduce((sum, e) => sum + Number(e.fullWeight || 0), 0);
+        rows.push({ ...s, emptyWeight, fullWeight, cycleName: cy.name, cycleEnded: !!cy.endDate });
       }
     }
   }
@@ -309,12 +312,24 @@ function buildTraderExcelWorkbook(workbook, { farmName, trader, rows }) {
   sheet.addRow([`التاجر: ${trader.name || "—"}`]);
   if (trader.phone) sheet.addRow([`الهاتف: ${trader.phone}`]);
   sheet.addRow([]);
-  sheet.addRow(["التاريخ", "السمسار", "صافي الوزن", "سعر الكيلة", "إجمالي الحساب", "واصل", "باقي"]);
+  sheet.addRow([
+    "التاريخ",
+    "السمسار",
+    "وزن فارغ",
+    "وزن ممتلئ",
+    "صافي الوزن",
+    "سعر الكيلة",
+    "إجمالي الحساب",
+    "واصل",
+    "باقي",
+  ]);
   const headerRow = sheet.lastRow.number;
   rows.forEach((row) => {
     sheet.addRow([
       formatLedgerDate(row.date),
       row.broker || "—",
+      Number(row.emptyWeight || 0),
+      Number(row.fullWeight || 0),
       Number(row.totalNetWeight || 0),
       Number(row.pricePerKg || 0),
       Number(row.totalAmount || 0),
@@ -323,6 +338,8 @@ function buildTraderExcelWorkbook(workbook, { farmName, trader, rows }) {
     ]);
   });
   if (rows.length > 0) {
+    const totalEmptyKg = rows.reduce((s, r) => s + Number(r.emptyWeight || 0), 0);
+    const totalFullKg = rows.reduce((s, r) => s + Number(r.fullWeight || 0), 0);
     const totalKg = rows.reduce((s, r) => s + Number(r.totalNetWeight || 0), 0);
     const totalAmount = rows.reduce((s, r) => s + Number(r.totalAmount || 0), 0);
     const totalPaid = rows.reduce((s, r) => s + Number(r.paidAmount || 0), 0);
@@ -330,6 +347,8 @@ function buildTraderExcelWorkbook(workbook, { farmName, trader, rows }) {
     sheet.addRow([
       "الإجمالي",
       "",
+      totalEmptyKg,
+      totalFullKg,
       totalKg,
       totalKg > 0 ? totalAmount / totalKg : 0,
       totalAmount,
@@ -338,8 +357,8 @@ function buildTraderExcelWorkbook(workbook, { farmName, trader, rows }) {
     ]);
     sheet.lastRow.font = { bold: true };
   }
-  styleSheetHeader(sheet, headerRow, 7);
-  for (const col of [3, 4, 5, 6, 7]) sheet.getColumn(col).numFmt = "#,##0.00";
+  styleSheetHeader(sheet, headerRow, 9);
+  for (const col of [3, 4, 5, 6, 7, 8, 9]) sheet.getColumn(col).numFmt = "#,##0.00";
 }
 
 function buildBrokerExcelWorkbook(workbook, { farmName, broker, saleRows, byTrader }) {

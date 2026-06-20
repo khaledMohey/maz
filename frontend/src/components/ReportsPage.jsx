@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import PageHeader from './ui/PageHeader'
 import LoadingState from './ui/LoadingState'
 import EmptyState from './ui/EmptyState'
+import ColoredMoney from './ui/ColoredMoney'
 
 /** تقويم محلي YYYY-MM-DD */
 function localDateKeyDaily(isoOrDate) {
@@ -293,13 +294,13 @@ function ReportsPage({ farmName, report, cycle, loading, onBack }) {
                             {row.gasSmall > 0 ? row.gasSmall : '—'}
                           </td>
                           <td className={`px-3 py-2.5 text-center font-semibold sm:px-4 ${row.solarCost > 0 ? 'text-slate-900' : 'text-slate-400'}`}>
-                            {row.solarCost > 0 ? Number(row.solarCost).toLocaleString('ar-EG', { maximumFractionDigits: 0 }) : '—'}
+                            {row.solarCost > 0 ? <ColoredMoney value={row.solarCost} fractionDigits={0} /> : '—'}
                           </td>
                           <td className={`px-3 py-2.5 text-center font-semibold sm:px-4 ${row.electricDisplay === '—' ? 'text-slate-400' : 'text-slate-900'}`}>
                             {row.electricDisplay}
                           </td>
                           <td className={`px-3 py-2.5 text-center font-semibold sm:px-4 ${row.transport > 0 ? 'text-slate-900' : 'text-slate-400'}`}>
-                            {row.transport > 0 ? Number(row.transport).toLocaleString('ar-EG', { maximumFractionDigits: 0 }) : '—'}
+                            {row.transport > 0 ? <ColoredMoney value={row.transport} fractionDigits={0} /> : '—'}
                           </td>
                         </tr>
                       ))}
@@ -321,19 +322,27 @@ function ReportsPage({ farmName, report, cycle, loading, onBack }) {
                           <td className="px-3 py-3 text-center sm:px-4">{dailyTotals.gasBig}</td>
                           <td className="px-3 py-3 text-center sm:px-4">{dailyTotals.gasSmall}</td>
                           <td className="px-3 py-3 text-center sm:px-4">
-                            {dailyTotals.solar > 0
-                              ? Number(dailyTotals.solar).toLocaleString('ar-EG', { maximumFractionDigits: 0 })
-                              : '—'}
+                            {dailyTotals.solar > 0 ? (
+                              <ColoredMoney value={dailyTotals.solar} fractionDigits={0} />
+                            ) : (
+                              '—'
+                            )}
                           </td>
                           <td className="px-3 py-3 text-center text-xs sm:px-4 sm:text-sm">
-                            {dailyTotals.electricMoney > 0
-                              ? `${Number(dailyTotals.electricMoney).toLocaleString('ar-EG', { maximumFractionDigits: 0 })} ج`
-                              : '—'}
+                            {dailyTotals.electricMoney > 0 ? (
+                              <>
+                                <ColoredMoney value={dailyTotals.electricMoney} fractionDigits={0} /> ج
+                              </>
+                            ) : (
+                              '—'
+                            )}
                           </td>
                           <td className="px-3 py-3 text-center sm:px-4">
-                            {dailyTotals.transport > 0
-                              ? Number(dailyTotals.transport).toLocaleString('ar-EG', { maximumFractionDigits: 0 })
-                              : '—'}
+                            {dailyTotals.transport > 0 ? (
+                              <ColoredMoney value={dailyTotals.transport} fractionDigits={0} />
+                            ) : (
+                              '—'
+                            )}
                           </td>
                         </tr>
                       </tfoot>

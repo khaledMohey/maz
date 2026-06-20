@@ -187,6 +187,8 @@ function buildSupplierPdfHtml({ farmName, supplier, rows }) {
 }
 
 function buildTraderPdfHtml({ farmName, trader, rows }) {
+  const totalEmptyKg = rows.reduce((s, r) => s + Number(r.emptyWeight || 0), 0);
+  const totalFullKg = rows.reduce((s, r) => s + Number(r.fullWeight || 0), 0);
   const totalKg = rows.reduce((s, r) => s + Number(r.totalNetWeight || 0), 0);
   const totalAmount = rows.reduce((s, r) => s + Number(r.totalAmount || 0), 0);
   const totalPaid = rows.reduce((s, r) => s + Number(r.paidAmount || 0), 0);
@@ -197,18 +199,22 @@ function buildTraderPdfHtml({ farmName, trader, rows }) {
       ? rows.map((row) => [
           pdfDate(row.date),
           row.broker || "—",
+          pdfAmount(row.emptyWeight),
+          pdfAmount(row.fullWeight),
           pdfAmount(row.totalNetWeight),
           pdfAmount(row.pricePerKg),
           pdfAmount(row.totalAmount),
           pdfAmount(row.paidAmount),
           pdfAmount(row.remainingAmount),
         ])
-      : [["—", "—", "لا توجد مبيعات", "—", "—", "—", "—"]];
+      : [["—", "—", "—", "—", "لا توجد مبيعات", "—", "—", "—", "—"]];
 
   if (rows.length > 0) {
     tableRows.push([
       "الإجمالي",
       "",
+      pdfAmount(totalEmptyKg),
+      pdfAmount(totalFullKg),
       pdfAmount(totalKg),
       totalKg > 0 ? pdfAmount(totalAmount / totalKg) : "—",
       pdfAmount(totalAmount),
@@ -226,7 +232,17 @@ function buildTraderPdfHtml({ farmName, trader, rows }) {
     ],
     sections: [
       {
-        headers: ["التاريخ", "السمسار", "صافي الوزن", "سعر الكيلة", "إجمالي الحساب", "واصل", "باقي"],
+        headers: [
+          "التاريخ",
+          "السمسار",
+          "وزن فارغ",
+          "وزن ممتلئ",
+          "صافي الوزن",
+          "سعر الكيلة",
+          "إجمالي الحساب",
+          "واصل",
+          "باقي",
+        ],
         rows: tableRows,
       },
     ],

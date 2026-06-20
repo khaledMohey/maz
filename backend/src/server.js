@@ -372,6 +372,97 @@ async function registerPurchaseTreasuryMovement({
   return { ok: true, entry };
 }
 
+function supplierNamesMatch(left, right) {
+  return String(left || "").trim() === String(right || "").trim();
+}
+
+/** يحذف حركة خزنة مرتبطة بشراء (آجل أو سحب) عند حذف سجل الشراء */
+async function removeLinkedPurchaseTreasuryEntries({ farmId, amount, date, personName, notesPrefix }) {
+  if (!farmId || !notesPrefix) return [];
+  const numericAmount = Number(amount);
+  if (Number.isNaN(numericAmount) || numericAmount <= 0) return [];
+
+  const start = new Date(date);
+  if (Number.isNaN(start.getTime())) return [];
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+
+  const candidates = await prisma.treasuryEntry.findMany({
+    where: {
+      farmId,
+      amount: numericAmount,
+      date: { gte: start, lt: end },
+      type: { in: ["CREDIT_ADD", "WITHDRAW"] },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+  const prefix = String(notesPrefix);
+  let matched = candidates.filter((entry) => {
+    const notes = String(entry.notes || "");
+    if (!notes.startsWith(prefix)) return false;
+    if (entry.type === "CREDIT_ADD" && personName) {
+      return supplierNamesMatch(entry.personName, personName);
+    }
+    return true;
+  });
+
+  if (matched.length === 0 && personName) {
+    matched = candidates.filter((entry) => {
+      const notes = String(entry.notes || "");
+      if (!notes.startsWith(prefix)) return false;
+      return entry.type === "CREDIT_ADD" || entry.type === "WITHDRAW";
+    });
+  }
+
+  if (matched.length === 0) return [];
+  await prisma.treasuryEntry.delete({ where: { id: matched[0].id } });
+  return [matched[0].id];
+}
+
+/** يحذف إيداع الخزنة المرتبط بمدفوع بيع عند حذف سجل البيع */
+async function removeLinkedSaleTreasuryEntries({ farmId, amount, date, traderName }) {
+  if (!farmId) return [];
+  const numericAmount = Number(amount);
+  if (Number.isNaN(numericAmount) || numericAmount <= 0) return [];
+
+  const start = new Date(date);
+  if (Number.isNaN(start.getTime())) return [];
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+
+  const candidates = await prisma.treasuryEntry.findMany({
+    where: {
+      farmId,
+      amount: numericAmount,
+      date: { gte: start, lt: end },
+      type: "DEPOSIT",
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+  const matched = candidates.filter((entry) => {
+    const notes = String(entry.notes || "");
+    if (!notes.startsWith("مدفوع بيع")) return false;
+    if (traderName) return supplierNamesMatch(entry.personName, traderName);
+    return true;
+  });
+
+  if (matched.length === 0) return [];
+  await prisma.treasuryEntry.delete({ where: { id: matched[0].id } });
+  return [matched[0].id];
+}
+
+async function attachPurchaseDeleteMeta(mapped, cycleId, removedTreasuryEntryIds) {
+  if (!mapped) return mapped;
+  const cycle = await prisma.cycle.findUnique({ where: { id: cycleId }, select: { farmId: true } });
+  mapped.removedTreasuryEntryIds = removedTreasuryEntryIds || [];
+  mapped.farmId = cycle?.farmId || null;
+  return mapped;
+}
+
 async function ensureAlert({ farmId, cycleId, type, message }) {
   const since = new Date();
   since.setHours(0, 0, 0, 0);
@@ -1154,6 +1245,18 @@ app.post("/api/farms/:farmId/treasury-entries", async (req, res) => {
     return res.status(201).json(entry);
   } catch (error) {
     return res.status(500).json({ message: "تعذر حفظ حركة الخزنة", error: error.message });
+  }
+});
+
+app.delete("/api/farms/:farmId/treasury-entries/:entryId", async (req, res) => {
+  try {
+    const { farmId, entryId } = req.params;
+    const entry = await prisma.treasuryEntry.findFirst({ where: { id: entryId, farmId } });
+    if (!entry) return res.status(404).json({ message: "حركة الخزنة غير موجودة" });
+    await prisma.treasuryEntry.delete({ where: { id: entryId } });
+    return res.json({ ok: true, farmId, removedTreasuryEntryIds: [entryId] });
+  } catch (error) {
+    return res.status(500).json({ message: "تعذر حذف حركة الخزنة", error: error.message });
   }
 });
 
@@ -2583,9 +2686,20 @@ app.delete("/api/chick-arrivals/:arrivalId", async (req, res) => {
     const { arrivalId } = req.params;
     const existing = await prisma.chickArrival.findUnique({ where: { id: arrivalId } });
     if (!existing) return res.status(404).json({ message: "شحنة الكتاكيت غير موجودة" });
+    const cycle = await prisma.cycle.findUnique({
+      where: { id: existing.cycleId },
+      select: { farmId: true },
+    });
+    const removedTreasuryEntryIds = await removeLinkedPurchaseTreasuryEntries({
+      farmId: cycle?.farmId,
+      amount: existing.totalCost,
+      date: existing.arrivalDate,
+      personName: null,
+      notesPrefix: "شراء كتاكيت",
+    });
     await prisma.chickArrival.delete({ where: { id: arrivalId } });
     const mapped = await loadMappedCycle(existing.cycleId);
-    return res.json(mapped);
+    return res.json(await attachPurchaseDeleteMeta(mapped, existing.cycleId, removedTreasuryEntryIds));
   } catch (error) {
     return res.status(500).json({ message: "تعذر حذف شحنة الكتاكيت", error: error.message });
   }
@@ -2663,9 +2777,20 @@ app.delete("/api/feeds/:feedId", async (req, res) => {
     const { feedId } = req.params;
     const existing = await prisma.feed.findUnique({ where: { id: feedId } });
     if (!existing) return res.status(404).json({ message: "سجل العلف غير موجود" });
+    const cycle = await prisma.cycle.findUnique({
+      where: { id: existing.cycleId },
+      select: { farmId: true },
+    });
+    const removedTreasuryEntryIds = await removeLinkedPurchaseTreasuryEntries({
+      farmId: cycle?.farmId,
+      amount: existing.totalCost,
+      date: existing.date,
+      personName: existing.supplier,
+      notesPrefix: "شراء علف",
+    });
     await prisma.feed.delete({ where: { id: feedId } });
     const mapped = await loadMappedCycle(existing.cycleId);
-    return res.json(mapped);
+    return res.json(await attachPurchaseDeleteMeta(mapped, existing.cycleId, removedTreasuryEntryIds));
   } catch (error) {
     return res.status(500).json({ message: "تعذر حذف سجل العلف", error: error.message });
   }
@@ -2698,9 +2823,20 @@ app.delete("/api/gases/:gasId", async (req, res) => {
     const { gasId } = req.params;
     const existing = await prisma.gas.findUnique({ where: { id: gasId } });
     if (!existing) return res.status(404).json({ message: "سجل الغاز غير موجود" });
+    const cycle = await prisma.cycle.findUnique({
+      where: { id: existing.cycleId },
+      select: { farmId: true },
+    });
+    const removedTreasuryEntryIds = await removeLinkedPurchaseTreasuryEntries({
+      farmId: cycle?.farmId,
+      amount: existing.cost,
+      date: existing.date,
+      personName: null,
+      notesPrefix: "شراء غاز",
+    });
     await prisma.gas.delete({ where: { id: gasId } });
     const mapped = await loadMappedCycle(existing.cycleId);
-    return res.json(mapped);
+    return res.json(await attachPurchaseDeleteMeta(mapped, existing.cycleId, removedTreasuryEntryIds));
   } catch (error) {
     return res.status(500).json({ message: "تعذر حذف سجل الغاز", error: error.message });
   }
@@ -2732,9 +2868,20 @@ app.delete("/api/solars/:solarId", async (req, res) => {
     const { solarId } = req.params;
     const existing = await prisma.solar.findUnique({ where: { id: solarId } });
     if (!existing) return res.status(404).json({ message: "سجل السولار غير موجود" });
+    const cycle = await prisma.cycle.findUnique({
+      where: { id: existing.cycleId },
+      select: { farmId: true },
+    });
+    const removedTreasuryEntryIds = await removeLinkedPurchaseTreasuryEntries({
+      farmId: cycle?.farmId,
+      amount: existing.cost,
+      date: existing.date,
+      personName: null,
+      notesPrefix: "شراء سولار",
+    });
     await prisma.solar.delete({ where: { id: solarId } });
     const mapped = await loadMappedCycle(existing.cycleId);
-    return res.json(mapped);
+    return res.json(await attachPurchaseDeleteMeta(mapped, existing.cycleId, removedTreasuryEntryIds));
   } catch (error) {
     return res.status(500).json({ message: "تعذر حذف سجل السولار", error: error.message });
   }
@@ -2766,9 +2913,20 @@ app.delete("/api/expenses/:expenseId", async (req, res) => {
     const { expenseId } = req.params;
     const existing = await prisma.expense.findUnique({ where: { id: expenseId } });
     if (!existing) return res.status(404).json({ message: "سجل المصروف غير موجود" });
+    const cycle = await prisma.cycle.findUnique({
+      where: { id: existing.cycleId },
+      select: { farmId: true },
+    });
+    const removedTreasuryEntryIds = await removeLinkedPurchaseTreasuryEntries({
+      farmId: cycle?.farmId,
+      amount: existing.amount,
+      date: existing.date,
+      personName: null,
+      notesPrefix: "مصروف",
+    });
     await prisma.expense.delete({ where: { id: expenseId } });
     const mapped = await loadMappedCycle(existing.cycleId);
-    return res.json(mapped);
+    return res.json(await attachPurchaseDeleteMeta(mapped, existing.cycleId, removedTreasuryEntryIds));
   } catch (error) {
     return res.status(500).json({ message: "تعذر حذف المصروف", error: error.message });
   }
@@ -2804,9 +2962,20 @@ app.delete("/api/medications/:medicationId", async (req, res) => {
     const { medicationId } = req.params;
     const existing = await prisma.medication.findUnique({ where: { id: medicationId } });
     if (!existing) return res.status(404).json({ message: "سجل العلاج غير موجود" });
+    const cycle = await prisma.cycle.findUnique({
+      where: { id: existing.cycleId },
+      select: { farmId: true },
+    });
+    const removedTreasuryEntryIds = await removeLinkedPurchaseTreasuryEntries({
+      farmId: cycle?.farmId,
+      amount: existing.totalCost,
+      date: existing.date,
+      personName: existing.supplier,
+      notesPrefix: "شراء علاج",
+    });
     await prisma.medication.delete({ where: { id: medicationId } });
     const mapped = await loadMappedCycle(existing.cycleId);
-    return res.json(mapped);
+    return res.json(await attachPurchaseDeleteMeta(mapped, existing.cycleId, removedTreasuryEntryIds));
   } catch (error) {
     return res.status(500).json({ message: "تعذر حذف العلاج", error: error.message });
   }
@@ -3064,9 +3233,19 @@ app.delete("/api/sales/:saleId", async (req, res) => {
     const { saleId } = req.params;
     const existing = await prisma.sale.findUnique({ where: { id: saleId } });
     if (!existing) return res.status(404).json({ message: "سجل البيع غير موجود" });
+    const cycle = await prisma.cycle.findUnique({
+      where: { id: existing.cycleId },
+      select: { farmId: true },
+    });
+    const removedTreasuryEntryIds = await removeLinkedSaleTreasuryEntries({
+      farmId: cycle?.farmId,
+      amount: existing.paidAmount,
+      date: existing.date,
+      traderName: existing.trader,
+    });
     await prisma.sale.delete({ where: { id: saleId } });
     const mapped = await loadMappedCycle(existing.cycleId);
-    return res.json(mapped);
+    return res.json(await attachPurchaseDeleteMeta(mapped, existing.cycleId, removedTreasuryEntryIds));
   } catch (error) {
     return res.status(500).json({ message: "تعذر حذف سجل البيع", error: error.message });
   }

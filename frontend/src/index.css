@@ -307,6 +307,27 @@
   }
 }
 
+/* المبالغ: آلاف أحمر | جنيهات أزرق | قروش أسود */
+.money-colored {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.money-colored .money-thousands {
+  color: #dc2626;
+  font-weight: inherit;
+}
+
+.money-colored .money-pounds {
+  color: #2563eb;
+  font-weight: inherit;
+}
+
+.money-colored .money-piastres,
+.money-colored .money-separator {
+  color: #0f172a;
+}
+
 @media print {
   .app-shell::before,
   .app-shell::after {

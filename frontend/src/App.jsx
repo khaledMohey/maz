@@ -106,8 +106,8 @@ function App() {
   const [saleCagesWeights, setSaleCagesWeights] = useState([""])
   const [saleEmptyWeights, setSaleEmptyWeights] = useState([""])
   const [saleFullWeights, setSaleFullWeights] = useState([""])
-  /** لكل سطر وزن ممتلئ: عدد الفرخ الفعلي لخصم المخزون (اختياري؛ إن وُجد يُستخدم بدل التقدير من متوسط الوزن) */
-  const [saleLineBirdCounts, setSaleLineBirdCounts] = useState([""])
+  /** لكل سطر وزن ممتلئ: عدد الأقفاص في هذه الوزنة */
+  const [saleLineCagesCounts, setSaleLineCagesCounts] = useState([""])
   const [dailyConsumptionDateInput, setDailyConsumptionDateInput] = useState(new Date().toISOString().slice(0, 10))
   const [dailyFeedConsumedInput, setDailyFeedConsumedInput] = useState("")
   const [dailyFeedUnitInput, setDailyFeedUnitInput] = useState('kg')
@@ -147,36 +147,37 @@ function App() {
     () => saleEmptyWeights.reduce((sum, value) => sum + Number(value || 0), 0),
     [saleEmptyWeights],
   )
-  const saleTotalCages = useMemo(
-    () => saleCagesWeights.reduce((sum, value) => sum + Number(value || 0), 0),
-    [saleCagesWeights],
-  )
+  const saleTotalCages = useMemo(() => {
+    if (saleSalePhase === "full") {
+      return saleFullWeights.reduce((sum, _, index) => {
+        const count = Number(saleLineCagesCounts[index] || saleCagesWeights[index] || 0)
+        return sum + (Number.isNaN(count) ? 0 : count)
+      }, 0)
+    }
+    return saleCagesWeights.reduce((sum, value) => sum + Number(value || 0), 0)
+  }, [saleSalePhase, saleFullWeights, saleLineCagesCounts, saleCagesWeights])
+
   const saleTotalFullWeight = useMemo(
     () => saleFullWeights.reduce((sum, value) => sum + Number(value || 0), 0),
     [saleFullWeights],
   )
-  const saleManualBirdCountTotal = useMemo(
-    () =>
-      saleLineBirdCounts.reduce((sum, value) => {
-        const count = Number(value)
-        return !Number.isNaN(count) && count >= 1 ? sum + Math.floor(count) : sum
-      }, 0),
-    [saleLineBirdCounts],
-  )
 
   const saleWizardRows = useMemo(() => {
     if (saleSalePhase !== "full") return []
-    if (saleTotalFullWeight === 0 && saleTotalEmptyWeight === 0) return []
-    return [
-      {
-        emptyWeight: saleTotalEmptyWeight,
-        fullWeight: saleTotalFullWeight,
-        cages: saleTotalCages,
-        netWeight: Math.max(0, saleTotalFullWeight - saleTotalEmptyWeight),
-        manualBirdCount: saleManualBirdCountTotal > 0 ? saleManualBirdCountTotal : null,
-      },
-    ]
-  }, [saleSalePhase, saleTotalCages, saleTotalEmptyWeight, saleTotalFullWeight, saleManualBirdCountTotal])
+    return saleFullWeights
+      .map((full, index) => {
+        const emptyW = Number(saleEmptyWeights[index] ?? 0)
+        const fullW = Number(full || 0)
+        const cages = Number(saleLineCagesCounts[index] || saleCagesWeights[index] || 0)
+        return {
+          emptyWeight: emptyW,
+          fullWeight: fullW,
+          cages,
+          netWeight: Math.max(0, fullW - emptyW),
+        }
+      })
+      .filter((row) => row.fullWeight > 0 || row.emptyWeight > 0)
+  }, [saleSalePhase, saleEmptyWeights, saleFullWeights, saleLineCagesCounts, saleCagesWeights])
 
   const saleEntriesComputed = saleWizardRows
 
@@ -299,7 +300,7 @@ function App() {
     const { treasuryEntry, ...cycleSnapshot } = updatedCycle
 
     const mergeCycleIntoFarm = (farm) => {
-      if (!farm?.activeCycle || farm.activeCycle.id !== cycleSnapshot.id) return farm
+      if (!farm || !cycleSnapshot?.id) return farm
       const existingCycles = farm.cycles || []
       const hasCycle = existingCycles.some((cycle) => cycle.id === cycleSnapshot.id)
       const cycles = hasCycle
@@ -308,7 +309,7 @@ function App() {
 
       return {
         ...farm,
-        activeCycle: cycleSnapshot,
+        activeCycle: farm.activeCycle?.id === cycleSnapshot.id ? cycleSnapshot : farm.activeCycle,
         cycles,
       }
     }
@@ -337,6 +338,24 @@ function App() {
         ? { ...prev, treasuryEntries: [entry, ...(prev.treasuryEntries || [])] }
         : prev,
     )
+  }
+
+  const applyRemovedTreasuryEntries = (farmId, entryIds = []) => {
+    const ids = new Set((entryIds || []).filter(Boolean))
+    if (!farmId || ids.size === 0) return
+    const stripEntries = (farm) =>
+      farm?.id === farmId
+        ? { ...farm, treasuryEntries: (farm.treasuryEntries || []).filter((row) => !ids.has(row.id)) }
+        : farm
+    setFarms((prev) => prev.map(stripEntries))
+    setSelectedFarm((prev) => (prev?.id === farmId ? stripEntries(prev) : prev))
+  }
+
+  const applyDeleteCycleResponse = (body) => {
+    if (body?.id) applyUpdatedCycle(body)
+    if (body?.farmId && body?.removedTreasuryEntryIds?.length) {
+      applyRemovedTreasuryEntries(body.farmId, body.removedTreasuryEntryIds)
+    }
   }
 
   const fetchPartners = async () => {
@@ -535,7 +554,7 @@ function App() {
     setSaleCagesWeights([""])
     setSaleEmptyWeights([""])
     setSaleFullWeights([""])
-    setSaleLineBirdCounts([""])
+    setSaleLineCagesCounts([""])
     setDailyConsumptionDateInput(new Date().toISOString().slice(0, 10))
     setDailyFeedConsumedInput("")
     setDailyFeedUnitInput('kg')
@@ -957,11 +976,11 @@ function App() {
   }
   const addSaleFullLine = () => {
     setSaleFullWeights((prev) => [...prev, ""])
-    setSaleLineBirdCounts((prev) => [...prev, ""])
+    setSaleLineCagesCounts((prev) => [...prev, ""])
   }
   const removeSaleFullLine = (index) => {
     setSaleFullWeights((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== index)))
-    setSaleLineBirdCounts((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== index)))
+    setSaleLineCagesCounts((prev) => (prev.length <= 1 ? prev : prev.filter((_, i) => i !== index)))
   }
   const confirmSaleEmptyPhase = () => {
     const hasEmpty = saleEmptyWeights.some((v) => Number(v) > 0)
@@ -970,7 +989,7 @@ function App() {
       return
     }
     setSaleFullWeights([""])
-    setSaleLineBirdCounts([""])
+    setSaleLineCagesCounts(saleCagesWeights.length ? [...saleCagesWeights] : [""])
     setSaleSalePhase("full")
     setError("")
   }
@@ -979,11 +998,11 @@ function App() {
     setSaleCagesWeights([""])
     setSaleEmptyWeights([""])
     setSaleFullWeights([""])
-    setSaleLineBirdCounts([""])
+    setSaleLineCagesCounts([""])
   }
 
-  const updateSaleLineBirdCount = (index, value) => {
-    setSaleLineBirdCounts((prev) => prev.map((v, i) => (i === index ? value : v)))
+  const updateSaleLineCagesCount = (index, value) => {
+    setSaleLineCagesCounts((prev) => prev.map((v, i) => (i === index ? value : v)))
   }
 
   const handleAddSale = async () => {
@@ -1023,7 +1042,6 @@ function App() {
             emptyWeight: entry.emptyWeight,
             fullWeight: entry.fullWeight,
             cages: Number(entry.cages || 0),
-            ...(entry.manualBirdCount != null ? { birdCount: entry.manualBirdCount } : {}),
           })),
         }),
       })
@@ -1196,6 +1214,23 @@ function App() {
     }
   }
 
+  const handleDeleteTreasuryEntry = async (entryId) => {
+    if (!selectedFarm) return { ok: false, message: 'لم تُختر مزرعة' }
+    try {
+      const response = await apiFetch(`/api/farms/${selectedFarm.id}/treasury-entries/${entryId}`, {
+        method: 'DELETE',
+      })
+      const body = await response.json().catch(() => ({}))
+      if (!response.ok) throw new Error(body.message || 'تعذر حذف حركة الخزنة')
+      applyRemovedTreasuryEntries(body.farmId || selectedFarm.id, body.removedTreasuryEntryIds || [entryId])
+      await fetchFarms()
+      return { ok: true }
+    } catch (err) {
+      setError(err.message || 'حدث خطأ')
+      return { ok: false, message: err.message }
+    }
+  }
+
   const handleAddWeight = async (averageWeightValue, dateValue, extras = {}) => {
     if (!selectedFarm?.activeCycle) return
     try {
@@ -1252,6 +1287,7 @@ function App() {
       const response = await apiFetch(`/api/chick-arrivals/${arrivalId}`, { method: 'DELETE' })
       const body = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(body.message || 'تعذر حذف شحنة الكتاكيت')
+      applyDeleteCycleResponse(body)
       await fetchFarms()
       return { ok: true }
     } catch (err) {
@@ -1312,6 +1348,7 @@ function App() {
       const response = await apiFetch(`/api/feeds/${feedId}`, { method: 'DELETE' })
       const body = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(body.message || 'تعذر حذف العلف')
+      applyDeleteCycleResponse(body)
       await fetchFarms()
       return { ok: true }
     } catch (err) {
@@ -1342,6 +1379,7 @@ function App() {
       const response = await apiFetch(`/api/gases/${gasId}`, { method: 'DELETE' })
       const body = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(body.message || 'تعذر حذف الغاز')
+      applyDeleteCycleResponse(body)
       await fetchFarms()
       return { ok: true }
     } catch (err) {
@@ -1372,6 +1410,7 @@ function App() {
       const response = await apiFetch(`/api/solars/${solarId}`, { method: 'DELETE' })
       const body = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(body.message || 'تعذر حذف السولار')
+      applyDeleteCycleResponse(body)
       await fetchFarms()
       return { ok: true }
     } catch (err) {
@@ -1402,6 +1441,7 @@ function App() {
       const response = await apiFetch(`/api/expenses/${expenseId}`, { method: 'DELETE' })
       const body = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(body.message || 'تعذر حذف المصروف')
+      applyDeleteCycleResponse(body)
       await fetchFarms()
       return { ok: true }
     } catch (err) {
@@ -1432,6 +1472,7 @@ function App() {
       const response = await apiFetch(`/api/medications/${medicationId}`, { method: 'DELETE' })
       const body = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(body.message || 'تعذر حذف العلاج')
+      applyDeleteCycleResponse(body)
       await fetchFarms()
       return { ok: true }
     } catch (err) {
@@ -1522,6 +1563,7 @@ function App() {
       const response = await apiFetch(`/api/sales/${saleId}`, { method: 'DELETE' })
       const body = await response.json().catch(() => ({}))
       if (!response.ok) throw new Error(body.message || 'تعذر حذف البيع')
+      applyDeleteCycleResponse(body)
       await fetchFarms()
       return { ok: true }
     } catch (err) {
@@ -1959,7 +2001,7 @@ function App() {
           saleCagesWeights={saleCagesWeights}
           saleEmptyWeights={saleEmptyWeights}
           saleFullWeights={saleFullWeights}
-          saleLineBirdCounts={saleLineBirdCounts}
+          saleLineCagesCounts={saleLineCagesCounts}
           saleEntriesComputed={saleEntriesComputed}
           saleTotalEmptyWeight={saleTotalEmptyWeight}
           saleTotalCages={saleTotalCages}
@@ -2037,7 +2079,7 @@ function App() {
           onSaleAddEmptyLine={addSaleEmptyLine}
           onSaleRemoveEmptyLine={removeSaleEmptyLine}
           onSaleFullLineChange={updateSaleFullLine}
-          onSaleLineBirdCountChange={updateSaleLineBirdCount}
+          onSaleLineCagesCountChange={updateSaleLineCagesCount}
           onSaleAddFullLine={addSaleFullLine}
           onSaleRemoveFullLine={removeSaleFullLine}
           onSaleConfirmEmptyPhase={confirmSaleEmptyPhase}
@@ -2064,6 +2106,7 @@ function App() {
           onAddBroker={handleAddBroker}
           onAddTrader={handleAddTrader}
           onAddTreasuryEntry={handleAddTreasuryEntry}
+          onDeleteTreasuryEntry={handleDeleteTreasuryEntry}
           onWeightDateChange={setWeightDateInput}
           onWeightGroupBirdCountChange={setWeightGroupBirdCountInput}
           onWeightGroupTotalKgChange={setWeightGroupTotalKgInput}

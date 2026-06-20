@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useState } from 'react'
 import LargeActionButton from './LargeActionButton'
 import LedgerExportButtons from './LedgerExportButtons'
 import SequentialPurchaseWizard, { WizardNextButton } from './SequentialPurchaseWizard'
+import ColoredMoney from './ui/ColoredMoney'
 
 const CONSUMPTION_BAG_KG = 50
 const LOG_TYPE_LABELS = {
@@ -30,13 +31,6 @@ function localDateKey(isoOrDate) {
 
 function supplierNamesMatch(left, right) {
   return (left || '').trim() === (right || '').trim()
-}
-
-function formatLedgerAmount(value) {
-  return Number(value || 0).toLocaleString('ar-EG', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
 }
 
 function creditAddMatchesPurchase(add, purchase) {
@@ -156,12 +150,30 @@ function collectSupplierLedgerRows(supplier, cycles, treasuryEntries = []) {
   return rows
 }
 
+function deleteSupplierLedgerRow(row, handlers) {
+  const { onDeleteFeed, onDeleteMedication, onDeleteTreasuryEntry } = handlers
+  if (!row?.id) return { ok: false, message: 'لا يمكن تحديد السطر' }
+  if (row.id.startsWith('feed-')) return onDeleteFeed?.(row.id.slice(5))
+  if (row.id.startsWith('medication-')) return onDeleteMedication?.(row.id.slice(11))
+  if (row.id.startsWith('treasury-')) return onDeleteTreasuryEntry?.(row.id.slice(9))
+  return { ok: false, message: 'هذا السطر لا يدعم الحذف من هنا' }
+}
+
+function sumSaleWeightEntries(sale) {
+  const entries = sale?.saleWeightEntries || []
+  return {
+    emptyWeight: entries.reduce((sum, entry) => sum + Number(entry.emptyWeight || 0), 0),
+    fullWeight: entries.reduce((sum, entry) => sum + Number(entry.fullWeight || 0), 0),
+  }
+}
+
 function collectTraderSalesRows(trader, cycles) {
   const rows = []
   for (const cy of cycles || []) {
     for (const s of cy.sales || []) {
       if (s.traderId === trader.id || (!s.traderId && (s.trader || '') === trader.name)) {
-        rows.push({ ...s, cycleName: cy.name, cycleEnded: !!cy.endDate })
+        const weights = sumSaleWeightEntries(s)
+        rows.push({ ...s, ...weights, cycleName: cy.name, cycleEnded: !!cy.endDate })
       }
     }
   }
@@ -366,7 +378,7 @@ function FarmPage({
   saleCagesWeights,
   saleEmptyWeights,
   saleFullWeights,
-  saleLineBirdCounts,
+  saleLineCagesCounts,
   saleEntriesComputed,
   saleTotalEmptyWeight,
   saleTotalCages,
@@ -444,7 +456,7 @@ function FarmPage({
   onSaleAddEmptyLine,
   onSaleRemoveEmptyLine,
   onSaleFullLineChange,
-  onSaleLineBirdCountChange,
+  onSaleLineCagesCountChange,
   onSaleAddFullLine,
   onSaleRemoveFullLine,
   onSaleConfirmEmptyPhase,
@@ -471,6 +483,7 @@ function FarmPage({
   onAddBroker,
   onAddTrader,
   onAddTreasuryEntry,
+  onDeleteTreasuryEntry,
   onWeightDateChange,
   onWeightGroupBirdCountChange,
   onWeightGroupTotalKgChange,
@@ -581,6 +594,18 @@ function FarmPage({
 
   const toggleSaleDetails = (saleId) => {
     setExpandedSales((prev) => ({ ...prev, [saleId]: !prev[saleId] }))
+  }
+
+  const handleDeleteSupplierLedgerRow = async (row) => {
+    if (!window.confirm('هل تريد حذف هذا السطر من كشف حساب المورد؟ سيتم حذف حركة الشراء المرتبطة.')) {
+      return
+    }
+    await deleteSupplierLedgerRow(row, { onDeleteFeed, onDeleteMedication, onDeleteTreasuryEntry })
+  }
+
+  const handleDeleteTraderSaleRow = async (saleId) => {
+    if (!window.confirm('هل تريد حذف هذه العملية من كشف حساب التاجر؟')) return
+    await onDeleteSale?.(saleId)
   }
 
   useEffect(() => {
@@ -1292,30 +1317,32 @@ function FarmPage({
                   </tr>
                   <tr className="border-t border-slate-100">
                     <td className="px-4 py-3">إجمالي تكلفة العلف</td>
-                    <td className="px-4 py-3">{Number(activeCycle.totalFeedCost || 0).toFixed(2)}</td>
+                    <td className="px-4 py-3"><ColoredMoney value={activeCycle.totalFeedCost} /></td>
                     <td className="px-4 py-3">إجمالي تكلفة الغاز</td>
-                    <td className="px-4 py-3">{Number(activeCycle.totalGasCost || 0).toFixed(2)}</td>
+                    <td className="px-4 py-3"><ColoredMoney value={activeCycle.totalGasCost} /></td>
                   </tr>
                   <tr className="border-t border-slate-100 bg-slate-50/60">
                     <td className="px-4 py-3">السولار</td>
                     <td className="px-4 py-3">{Number(activeCycle.totalSolarLiters || 0).toFixed(2)} لتر</td>
                     <td className="px-4 py-3">إجمالي المصاريف</td>
-                    <td className="px-4 py-3">{Number(activeCycle.totalExpenses || 0).toFixed(2)}</td>
+                    <td className="px-4 py-3"><ColoredMoney value={activeCycle.totalExpenses} /></td>
                   </tr>
                   <tr className="border-t border-slate-100">
                     <td className="px-4 py-3">إجمالي تكلفة العلاج</td>
-                    <td className="px-4 py-3">{Number(activeCycle.totalMedicationCost || 0).toFixed(2)}</td>
+                    <td className="px-4 py-3"><ColoredMoney value={activeCycle.totalMedicationCost} /></td>
                     <td className="px-4 py-3">صافي رواتب العمال</td>
-                    <td className="px-4 py-3">{Number(activeCycle.totalWorkerNetSalary || 0).toFixed(2)}</td>
+                    <td className="px-4 py-3"><ColoredMoney value={activeCycle.totalWorkerNetSalary} /></td>
                   </tr>
                   <tr className="border-t border-slate-100 bg-slate-50/60">
                     <td className="px-4 py-3">إجمالي تكلفة شراء الكتاكيت</td>
-                    <td className="px-4 py-3">{Number(activeCycle.totalChickPurchaseCost || 0).toFixed(2)}</td>
+                    <td className="px-4 py-3"><ColoredMoney value={activeCycle.totalChickPurchaseCost} /></td>
                     <td className="px-4 py-3">سعر الكتكوت (محسوب)</td>
                     <td className="px-4 py-3">
-                      {chickPriceFromConsumptionFormula != null
-                        ? Number(chickPriceFromConsumptionFormula).toFixed(2)
-                        : '—'}
+                      {chickPriceFromConsumptionFormula != null ? (
+                        <ColoredMoney value={chickPriceFromConsumptionFormula} />
+                      ) : (
+                        '—'
+                      )}
                     </td>
                   </tr>
                   <tr className="border-t border-slate-100">
@@ -1327,11 +1354,11 @@ function FarmPage({
                     <td className="px-4 py-3">صافي وزن البيع</td>
                     <td className="px-4 py-3">{Number(activeCycle.totalSalesNetWeight || 0).toFixed(2)} كجم</td>
                     <td className="px-4 py-3">إجمالي البيع</td>
-                    <td className="px-4 py-3">{Number(activeCycle.totalSalesAmount || 0).toFixed(2)}</td>
+                    <td className="px-4 py-3"><ColoredMoney value={activeCycle.totalSalesAmount} /></td>
                   </tr>
                   <tr className="border-t border-slate-100">
                     <td className="px-4 py-3">المتبقي</td>
-                    <td className="px-4 py-3">{Number(activeCycle.totalSalesRemaining || 0).toFixed(2)}</td>
+                    <td className="px-4 py-3"><ColoredMoney value={activeCycle.totalSalesRemaining} /></td>
                     <td className="px-4 py-3">العلف المستهلك</td>
                     <td className="px-4 py-3">{Number(activeCycle.totalDailyFeedConsumed || 0).toFixed(2)} كجم</td>
                   </tr>
@@ -1483,10 +1510,17 @@ function FarmPage({
                 <option value="MEDICATION">بند العلاج</option>
               </select>
               <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-700">
-                إجمالي البند: {consumptionItemFilter === 'FEED' ? totalFeedConsumptionCost.toFixed(2) : consumptionItemFilter === 'FUEL' ? totalFuelConsumptionCost.toFixed(2) : totalMedicationConsumptionCost.toFixed(2)}
+                إجمالي البند:{' '}
+                {consumptionItemFilter === 'FEED' ? (
+                  <ColoredMoney value={totalFeedConsumptionCost} />
+                ) : consumptionItemFilter === 'FUEL' ? (
+                  <ColoredMoney value={totalFuelConsumptionCost} />
+                ) : (
+                  <ColoredMoney value={totalMedicationConsumptionCost} />
+                )}
               </div>
               <div className="rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-sm font-bold text-teal-800">
-                إجمالي البنود الثلاثة: {totalConsumptionAll.toFixed(2)}
+                إجمالي البنود الثلاثة: <ColoredMoney value={totalConsumptionAll} />
               </div>
             </div>
           </div>
@@ -2327,14 +2361,15 @@ function FarmPage({
 
           <div className="mb-4 grid gap-3 md:grid-cols-2">
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-lg font-bold text-emerald-900">
-              رصيد الخزنة النقدي: {treasuryCashBalance.toFixed(2)}
+              رصيد الخزنة النقدي: <ColoredMoney value={treasuryCashBalance} />
             </div>
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-lg font-bold text-amber-900">
               إجمالي الأجل المفتوح:{' '}
-              {Object.values(creditByPerson)
-                .filter((v) => v > 0)
-                .reduce((s, v) => s + v, 0)
-                .toFixed(2)}
+              <ColoredMoney
+                value={Object.values(creditByPerson)
+                  .filter((v) => v > 0)
+                  .reduce((s, v) => s + v, 0)}
+              />
             </div>
           </div>
 
@@ -2411,7 +2446,7 @@ function FarmPage({
                             ? 'إضافة أجل'
                             : 'خصم من أجل'}
                     </td>
-                    <td className="px-3 py-2">{Number(row.amount || 0).toFixed(2)}</td>
+                    <td className="px-3 py-2"><ColoredMoney value={row.amount} /></td>
                     <td className="px-3 py-2">{row.personName || '—'}</td>
                     <td className="px-3 py-2">{row.notes || '—'}</td>
                   </tr>
@@ -2442,7 +2477,7 @@ function FarmPage({
                   .map(([person, amount]) => (
                     <tr key={person} className="border-b border-slate-100">
                       <td className="px-3 py-2">{person}</td>
-                      <td className="px-3 py-2 font-semibold text-amber-800">{Number(amount).toFixed(2)}</td>
+                      <td className="px-3 py-2 font-semibold text-amber-800"><ColoredMoney value={amount} /></td>
                       <td className="px-3 py-2">
                         <div className="flex gap-2">
                           <button
@@ -2597,6 +2632,7 @@ function FarmPage({
                           <th className="px-3 py-2">إجمالي الحساب</th>
                           <th className="px-3 py-2">واصل</th>
                           <th className="px-3 py-2">باقي</th>
+                          <th className="px-3 py-2 w-[1%] whitespace-nowrap">إجراءات</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -2606,14 +2642,27 @@ function FarmPage({
                             <td className="px-3 py-2 font-medium text-slate-900">{formatLedgerDate(row.date)}</td>
                             <td className="px-3 py-2 font-semibold text-slate-800">{row.itemType}</td>
                             <td className="px-3 py-2 font-semibold text-amber-900">{row.quantityLabel}</td>
-                            <td className="px-3 py-2 font-bold text-slate-900">{formatLedgerAmount(row.amount)}</td>
-                            <td className="px-3 py-2">{formatLedgerAmount(row.paidAmount)}</td>
-                            <td className="px-3 py-2 font-bold text-rose-800">{formatLedgerAmount(row.remainingAmount)}</td>
+                            <td className="px-3 py-2 font-bold text-slate-900"><ColoredMoney value={row.amount} /></td>
+                            <td className="px-3 py-2"><ColoredMoney value={row.paidAmount} /></td>
+                            <td className="px-3 py-2 font-bold text-rose-800"><ColoredMoney value={row.remainingAmount} /></td>
+                            <td className="px-3 py-2">
+                              {(row.id.startsWith('feed-') ||
+                                row.id.startsWith('medication-') ||
+                                row.id.startsWith('treasury-')) && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteSupplierLedgerRow(row)}
+                                  className="app-btn-xs-delete"
+                                >
+                                  حذف
+                                </button>
+                              )}
+                            </td>
                           </tr>
                         ))}
                         {rows.length === 0 && (
                           <tr>
-                            <td className="px-3 py-3 text-slate-500" colSpan={7}>
+                            <td className="px-3 py-3 text-slate-500" colSpan={8}>
                               لا توجد حركات شراء لهذا المورد بعد.
                             </td>
                           </tr>
@@ -2625,9 +2674,10 @@ function FarmPage({
                             <td className="px-3 py-2 font-bold text-slate-900" colSpan={4}>
                               الإجمالي
                             </td>
-                            <td className="px-3 py-2 font-bold text-slate-900">{formatLedgerAmount(totalAmount)}</td>
-                            <td className="px-3 py-2 font-bold text-slate-900">{formatLedgerAmount(totalPaid)}</td>
-                            <td className="px-3 py-2 font-bold text-rose-900">{formatLedgerAmount(totalRemaining)}</td>
+                            <td className="px-3 py-2 font-bold text-slate-900"><ColoredMoney value={totalAmount} /></td>
+                            <td className="px-3 py-2 font-bold text-slate-900"><ColoredMoney value={totalPaid} /></td>
+                            <td className="px-3 py-2 font-bold text-rose-900"><ColoredMoney value={totalRemaining} /></td>
+                            <td className="px-3 py-2" />
                           </tr>
                         </tfoot>
                       )}
@@ -2738,6 +2788,8 @@ function FarmPage({
             )}
             {(traders || []).map((t) => {
               const rows = collectTraderSalesRows(t, cycles)
+              const totalEmptyKg = rows.reduce((sum, r) => sum + Number(r.emptyWeight || 0), 0)
+              const totalFullKg = rows.reduce((sum, r) => sum + Number(r.fullWeight || 0), 0)
               const totalKg = rows.reduce((sum, r) => sum + Number(r.totalNetWeight || 0), 0)
               const totalAmount = rows.reduce((sum, r) => sum + Number(r.totalAmount || 0), 0)
               const totalPaid = rows.reduce((sum, r) => sum + Number(r.paidAmount || 0), 0)
@@ -2787,10 +2839,12 @@ function FarmPage({
                     </div>
                   </div>
                   <div className="app-table-wrap bg-white">
-                    <table className="ledger-sheet-table w-full min-w-[640px] text-right text-base">
+                    <table className="ledger-sheet-table w-full min-w-[820px] text-right text-base">
                       <thead>
                         <tr>
                           <th className="px-3 py-2">التاريخ</th>
+                          <th className="px-3 py-2">وزن فارغ</th>
+                          <th className="px-3 py-2">وزن ممتلئ</th>
                           <th className="px-3 py-2">صافي الوزن</th>
                           <th className="px-3 py-2">سعر الكيلة</th>
                           <th className="px-3 py-2">إجمالي الحساب</th>
@@ -2809,6 +2863,18 @@ function FarmPage({
                                   <span className="mt-1 block text-sm text-teal-800">السمسار: {row.broker}</span>
                                 ) : null}
                               </td>
+                              <td className="px-3 py-2 font-semibold text-slate-700">
+                                {Number(row.emptyWeight || 0).toLocaleString('ar-EG', {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2,
+                                })}
+                              </td>
+                              <td className="px-3 py-2 font-semibold text-slate-800">
+                                {Number(row.fullWeight || 0).toLocaleString('ar-EG', {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2,
+                                })}
+                              </td>
                               <td className="px-3 py-2 font-semibold text-amber-950">
                                 {Number(row.totalNetWeight || 0).toLocaleString('ar-EG', {
                                   minimumFractionDigits: 2,
@@ -2816,28 +2882,16 @@ function FarmPage({
                                 })}
                               </td>
                               <td className="px-3 py-2">
-                                {Number(row.pricePerKg || 0).toLocaleString('ar-EG', {
-                                  minimumFractionDigits: 2,
-                                  maximumFractionDigits: 2,
-                                })}
+                                <ColoredMoney value={row.pricePerKg} />
                               </td>
                               <td className="px-3 py-2 font-bold text-slate-900">
-                                {Number(row.totalAmount || 0).toLocaleString('ar-EG', {
-                                  minimumFractionDigits: 2,
-                                  maximumFractionDigits: 2,
-                                })}
+                                <ColoredMoney value={row.totalAmount} />
                               </td>
                               <td className="px-3 py-2">
-                                {Number(row.paidAmount || 0).toLocaleString('ar-EG', {
-                                  minimumFractionDigits: 2,
-                                  maximumFractionDigits: 2,
-                                })}
+                                <ColoredMoney value={row.paidAmount} />
                               </td>
                               <td className="px-3 py-2 font-bold text-rose-800">
-                                {Number(row.remainingAmount || 0).toLocaleString('ar-EG', {
-                                  minimumFractionDigits: 2,
-                                  maximumFractionDigits: 2,
-                                })}
+                                <ColoredMoney value={row.remainingAmount} />
                               </td>
                               <td className="px-3 py-2">
                                 <div className="flex flex-wrap gap-1">
@@ -2855,12 +2909,19 @@ function FarmPage({
                                   >
                                     PDF
                                   </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteTraderSaleRow(row.id)}
+                                    className="app-btn-xs-delete"
+                                  >
+                                    حذف
+                                  </button>
                                 </div>
                               </td>
                             </tr>
                             {expandedSales[row.id] && (
                               <tr>
-                                <td colSpan={7} className="px-3 py-2 bg-slate-50">
+                                <td colSpan={9} className="px-3 py-2 bg-slate-50">
                                   <div className="app-table-wrap">
                                     <table className="w-full min-w-[620px] text-right text-sm">
                                       <thead>
@@ -2900,7 +2961,7 @@ function FarmPage({
                         ))}
                         {rows.length === 0 && (
                           <tr>
-                            <td className="px-3 py-3 text-slate-500" colSpan={7}>
+                            <td className="px-3 py-3 text-slate-500" colSpan={9}>
                               لا توجد مبيعات مسجّلة لهذا التاجر بعد.
                             </td>
                           </tr>
@@ -2910,28 +2971,26 @@ function FarmPage({
                         <tfoot>
                           <tr className="ledger-sheet-total-row">
                             <td className="px-3 py-2 font-bold text-slate-900">الإجمالي</td>
+                            <td className="px-3 py-2 font-bold text-slate-700">
+                              {totalEmptyKg.toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                            <td className="px-3 py-2 font-bold text-slate-800">
+                              {totalFullKg.toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
                             <td className="px-3 py-2 font-bold text-amber-950">
                               {totalKg.toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                             </td>
                             <td className="px-3 py-2 font-bold text-slate-800">
-                              {totalKg > 0
-                                ? (totalAmount / totalKg).toLocaleString('ar-EG', {
-                                    minimumFractionDigits: 2,
-                                    maximumFractionDigits: 2,
-                                  })
-                                : '—'}
+                              {totalKg > 0 ? <ColoredMoney value={totalAmount / totalKg} /> : '—'}
                             </td>
                             <td className="px-3 py-2 font-bold text-slate-900">
-                              {totalAmount.toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              <ColoredMoney value={totalAmount} />
                             </td>
                             <td className="px-3 py-2 font-bold text-slate-900">
-                              {totalPaid.toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              <ColoredMoney value={totalPaid} />
                             </td>
                             <td className="px-3 py-2 font-bold text-rose-900">
-                              {totalRemaining.toLocaleString('ar-EG', {
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 2,
-                              })}
+                              <ColoredMoney value={totalRemaining} />
                             </td>
                             <td className="px-3 py-2" />
                           </tr>
@@ -3083,27 +3142,16 @@ function FarmPage({
                                 {row.totalNetKg.toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </td>
                               <td className="px-3 py-2">
-                                {row.avgPricePerKg > 0
-                                  ? row.avgPricePerKg.toLocaleString('ar-EG', {
-                                      minimumFractionDigits: 2,
-                                      maximumFractionDigits: 2,
-                                    })
-                                  : '—'}
+                                {row.avgPricePerKg > 0 ? <ColoredMoney value={row.avgPricePerKg} /> : '—'}
                               </td>
                               <td className="px-3 py-2 font-bold text-slate-900">
-                                {row.totalAmount.toLocaleString('ar-EG', {
-                                  minimumFractionDigits: 2,
-                                  maximumFractionDigits: 2,
-                                })}
+                                <ColoredMoney value={row.totalAmount} />
                               </td>
                               <td className="px-3 py-2">
-                                {row.totalPaid.toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                <ColoredMoney value={row.totalPaid} />
                               </td>
                               <td className="px-3 py-2 font-bold text-rose-800">
-                                {row.totalRemaining.toLocaleString('ar-EG', {
-                                  minimumFractionDigits: 2,
-                                  maximumFractionDigits: 2,
-                                })}
+                                <ColoredMoney value={row.totalRemaining} />
                               </td>
                             </tr>
                           ))}
@@ -3123,21 +3171,16 @@ function FarmPage({
                                 {grandKg.toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </td>
                               <td className="px-3 py-2 font-bold text-slate-800">
-                                {grandKg > 0
-                                  ? (grandTotal / grandKg).toLocaleString('ar-EG', {
-                                      minimumFractionDigits: 2,
-                                      maximumFractionDigits: 2,
-                                    })
-                                  : '—'}
+                                {grandKg > 0 ? <ColoredMoney value={grandTotal / grandKg} /> : '—'}
                               </td>
                               <td className="px-3 py-2 font-bold text-slate-900">
-                                {grandTotal.toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                <ColoredMoney value={grandTotal} />
                               </td>
                               <td className="px-3 py-2 font-bold text-slate-900">
-                                {grandPaid.toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                <ColoredMoney value={grandPaid} />
                               </td>
                               <td className="px-3 py-2 font-bold text-rose-900">
-                                {grandRem.toLocaleString('ar-EG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                <ColoredMoney value={grandRem} />
                               </td>
                             </tr>
                           </tfoot>
@@ -3178,28 +3221,16 @@ function FarmPage({
                                   })}
                                 </td>
                                 <td className="px-3 py-2">
-                                  {Number(row.pricePerKg || 0).toLocaleString('ar-EG', {
-                                    minimumFractionDigits: 2,
-                                    maximumFractionDigits: 2,
-                                  })}
+                                  <ColoredMoney value={row.pricePerKg} />
                                 </td>
                                 <td className="px-3 py-2 font-bold text-slate-900">
-                                  {Number(row.totalAmount || 0).toLocaleString('ar-EG', {
-                                    minimumFractionDigits: 2,
-                                    maximumFractionDigits: 2,
-                                  })}
+                                  <ColoredMoney value={row.totalAmount} />
                                 </td>
                                 <td className="px-3 py-2">
-                                  {Number(row.paidAmount || 0).toLocaleString('ar-EG', {
-                                    minimumFractionDigits: 2,
-                                    maximumFractionDigits: 2,
-                                  })}
+                                  <ColoredMoney value={row.paidAmount} />
                                 </td>
                                 <td className="px-3 py-2 font-bold text-rose-800">
-                                  {Number(row.remainingAmount || 0).toLocaleString('ar-EG', {
-                                    minimumFractionDigits: 2,
-                                    maximumFractionDigits: 2,
-                                  })}
+                                  <ColoredMoney value={row.remainingAmount} />
                                 </td>
                                 <td className="px-3 py-2">
                                   <div className="flex flex-wrap gap-1">
@@ -3419,8 +3450,8 @@ function FarmPage({
                 </div>
               </div>
               <p className="mb-2 text-sm text-slate-600">
-                أدخل الأوزان الممتلئة وزنة وزنة. الحساب النهائي يكون: إجمالي الممتلئ - إجمالي الفارغ = صافي البيع.
-                واختياريًا أدخل <strong>عدد الفرخ</strong> في الوزنة؛ إن تركته فارغًا يُقدَّر العدد من آخر متوسط وزن مسجّل.
+                أدخل الأوزان الممتلئة وزنة وزنة مع <strong>عدد الأقفاص</strong> لكل وزنة. الحساب النهائي: إجمالي
+                الممتلئ − إجمالي الفارغ = صافي البيع. عدد الفرخ يُقدَّر تلقائيًا من آخر متوسط وزن مسجّل.
               </p>
               {saleFullWeights.map((w, index) => (
                 <div key={`sale-full-${index}`} className="mb-2 flex flex-wrap items-center gap-2 rounded-xl border border-slate-100 bg-slate-50 p-2">
@@ -3438,10 +3469,10 @@ function FarmPage({
                     type="number"
                     min="0"
                     className="app-input w-24 shrink-0"
-                    placeholder="عدد الفرخ"
-                    title="عدد الفرخ في هذه الأقفاص — يُخصم من المخزون"
-                    value={saleLineBirdCounts[index] ?? ''}
-                    onChange={(e) => onSaleLineBirdCountChange(index, e.target.value)}
+                    placeholder="عدد الأقفاص"
+                    title="عدد الأقفاص في هذه الوزنة"
+                    value={saleLineCagesCounts[index] ?? ''}
+                    onChange={(e) => onSaleLineCagesCountChange(index, e.target.value)}
                   />
                   {saleFullWeights.length > 1 && (
                     <button type="button" onClick={() => onSaleRemoveFullLine(index)} className="app-btn-xs-delete">
@@ -3469,7 +3500,7 @@ function FarmPage({
               {saleSalePhase !== 'full' && <span className="mr-2 block text-sm font-normal text-slate-600">(بعد إكمال الممتلئ)</span>}
             </div>
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-lg font-semibold">
-              إجمالي السعر: {saleTotalPrice.toFixed(2)} | المتبقي: {saleRemaining.toFixed(2)}
+              إجمالي السعر: <ColoredMoney value={saleTotalPrice} /> | المتبقي: <ColoredMoney value={saleRemaining} />
             </div>
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-lg font-semibold">
               إجمالي الأقفاص: {saleTotalCages.toFixed(0)}
@@ -3501,12 +3532,12 @@ function FarmPage({
                     <tr className="border-b border-slate-100 bg-slate-50">
                       <td className="px-3 py-2">{new Date(sale.date).toLocaleDateString("ar-EG")}</td>
                       <td className="px-3 py-2">{sale.linkedTrader?.name || sale.trader || "-"}</td>
-                      <td className="px-3 py-2">{Number(sale.pricePerKg || 0).toFixed(2)}</td>
+                      <td className="px-3 py-2"><ColoredMoney value={sale.pricePerKg} /></td>
                       <td className="px-3 py-2">{Number(sale.totalNetWeight || 0).toFixed(2)}</td>
-                      <td className="px-3 py-2">{Number(sale.totalAmount || 0).toFixed(2)}</td>
-                      <td className="px-3 py-2">{Number(sale.paidAmount || 0).toFixed(2)}</td>
+                      <td className="px-3 py-2"><ColoredMoney value={sale.totalAmount} /></td>
+                      <td className="px-3 py-2"><ColoredMoney value={sale.paidAmount} /></td>
                       <td className="px-3 py-2 font-bold text-rose-700">
-                        {Number(sale.remainingAmount || 0).toFixed(2)}
+                        <ColoredMoney value={sale.remainingAmount} />
                       </td>
                       <td className="px-3 py-2">
                         <button
@@ -3789,13 +3820,13 @@ function FarmPage({
                     <td className="px-3 py-2">
                       {worker.hiredAt ? new Date(worker.hiredAt).toLocaleDateString("ar-EG") : "-"}
                     </td>
-                    <td className="px-3 py-2">{Number(worker.monthlySalary || 0).toFixed(2)}</td>
-                    <td className="px-3 py-2">{Number(worker.dailySalary || 0).toFixed(2)}</td>
+                    <td className="px-3 py-2"><ColoredMoney value={worker.monthlySalary} /></td>
+                    <td className="px-3 py-2"><ColoredMoney value={worker.dailySalary} /></td>
                     <td className="px-3 py-2">{worker.workedDays || 0}</td>
-                    <td className="px-3 py-2">{Number(worker.totalSalary || 0).toFixed(2)}</td>
-                    <td className="px-3 py-2">{Number(worker.workerExpenses || 0).toFixed(2)}</td>
+                    <td className="px-3 py-2"><ColoredMoney value={worker.totalSalary} /></td>
+                    <td className="px-3 py-2"><ColoredMoney value={worker.workerExpenses} /></td>
                     <td className="px-3 py-2 font-bold text-teal-700">
-                      {Number(worker.netSalary || 0).toFixed(2)}
+                      <ColoredMoney value={worker.netSalary} />
                     </td>
                     <td className="px-3 py-2">
                       <div className="flex gap-2">
@@ -3863,7 +3894,7 @@ function FarmPage({
                       <td className="px-3 py-2">{new Date(exp.date).toLocaleDateString('ar-EG')}</td>
                       <td className="px-3 py-2">{worker?.name || '—'}</td>
                       <td className="px-3 py-2 font-semibold text-slate-800">{exp.category || 'صرف'}</td>
-                      <td className="px-3 py-2">{Number(exp.amount || 0).toFixed(2)}</td>
+                      <td className="px-3 py-2"><ColoredMoney value={exp.amount} /></td>
                       <td className="px-3 py-2">{exp.description || '—'}</td>
                       <td className="px-3 py-2">
                         <div className="flex gap-2">
@@ -4183,7 +4214,7 @@ function FarmPage({
                     <td className="px-3 py-2">{item.supplier || "-"}</td>
                     <td className="px-3 py-2">{Number(item.quantity || 0).toFixed(2)}</td>
                     <td className="px-3 py-2">{Number(item.usedQuantity || 0).toFixed(2)}</td>
-                    <td className="px-3 py-2">{Number(item.totalCost || 0).toFixed(2)}</td>
+                    <td className="px-3 py-2"><ColoredMoney value={item.totalCost} /></td>
                     <td className="px-3 py-2">
                       <button
                         type="button"
@@ -4295,7 +4326,7 @@ function FarmPage({
                   <tr key={expense.id} className="border-b border-slate-100">
                     <td className="px-3 py-2">{new Date(expense.date).toLocaleDateString("ar-EG")}</td>
                     <td className="px-3 py-2">{expense.title}</td>
-                    <td className="px-3 py-2">{Number(expense.amount).toFixed(2)}</td>
+                    <td className="px-3 py-2"><ColoredMoney value={expense.amount} /></td>
                     <td className="px-3 py-2">
                       <div className="flex gap-2">
                         <button
@@ -4426,7 +4457,11 @@ function FarmPage({
                             {Number(row.count || 0).toLocaleString('ar-EG')}
                           </td>
                           <td className="px-2 py-2 font-semibold text-slate-800">
-                            {Number(row.totalCost ?? 0).toLocaleString('ar-EG', { maximumFractionDigits: 2 })}
+                            {Number(row.totalCost ?? 0) > 0 ? (
+                              <ColoredMoney value={row.totalCost} />
+                            ) : (
+                              '—'
+                            )}
                           </td>
                           <td className="px-2 py-2 text-slate-800">
                             {row.arrivalDate
@@ -4546,17 +4581,17 @@ function FarmPage({
                   <p>
                     إجمالي خسارة النفوق (مسجّل):{' '}
                     <span className="font-bold text-rose-800">
-                      {Number(activeCycle.totalMortalityLossRecorded || 0).toLocaleString('ar-EG', {
-                        maximumFractionDigits: 2,
-                      })}
+                      <ColoredMoney value={activeCycle.totalMortalityLossRecorded} />
                     </span>
                   </p>
                   <p>
                     سعر الكتكوت الحالي للدورة:{' '}
                     <span className="font-bold text-slate-900">
-                      {chickPriceFromConsumptionFormula != null
-                        ? Number(chickPriceFromConsumptionFormula).toLocaleString('ar-EG', { maximumFractionDigits: 2 })
-                        : '—'}
+                      {chickPriceFromConsumptionFormula != null ? (
+                        <ColoredMoney value={chickPriceFromConsumptionFormula} />
+                      ) : (
+                        '—'
+                      )}
                     </span>
                   </p>
                   {Number(activeCycle.mortalitiesWithoutPriceSnapshot || 0) > 0 && (
@@ -4598,14 +4633,18 @@ function FarmPage({
                             <td className="px-2 py-2">{new Date(row.date).toLocaleDateString('ar-EG')}</td>
                             <td className="px-2 py-2 font-bold text-rose-800">{Number(row.count || 0)}</td>
                             <td className="px-2 py-2 font-semibold text-slate-800">
-                              {row.chickPriceAtRecord != null
-                                ? Number(row.chickPriceAtRecord).toLocaleString('ar-EG', { maximumFractionDigits: 4 })
-                                : '—'}
+                              {row.chickPriceAtRecord != null ? (
+                                <ColoredMoney value={row.chickPriceAtRecord} fractionDigits={4} />
+                              ) : (
+                                '—'
+                              )}
                             </td>
                             <td className="px-2 py-2 font-bold text-rose-900">
-                              {row.mortalityLineLoss != null
-                                ? Number(row.mortalityLineLoss).toLocaleString('ar-EG', { maximumFractionDigits: 2 })
-                                : '—'}
+                              {row.mortalityLineLoss != null ? (
+                                <ColoredMoney value={row.mortalityLineLoss} />
+                              ) : (
+                                '—'
+                              )}
                             </td>
                             <td className="px-2 py-2 text-slate-700">{row.reason || '—'}</td>
                             <td className="px-2 py-2 text-slate-600">
@@ -4813,7 +4852,7 @@ function FarmPage({
                         <strong>التاريخ:</strong> {feedDateInput}
                       </p>
                       <p className="mt-2 font-bold">
-                        الوزن الإجمالي: {feedTotalWeightKg.toFixed(2)} كجم — التكلفة: {feedTotalCost.toFixed(2)}
+                        الوزن الإجمالي: {feedTotalWeightKg.toFixed(2)} كجم — التكلفة: <ColoredMoney value={feedTotalCost} />
                       </p>
                       <p>
                         <strong>السداد:</strong>{' '}
