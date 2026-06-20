@@ -9,6 +9,10 @@ import AppChrome from './components/layout/AppChrome'
 import LoadingState from './components/ui/LoadingState'
 import { cacheData, enqueueRequest, getCachedData, syncQueuedRequests } from './offlineSync'
 
+function roundWeightKg(value) {
+  return Math.round(Number(value || 0) * 100) / 100
+}
+
 function App() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -147,15 +151,18 @@ function App() {
     () => saleEmptyWeights.reduce((sum, value) => sum + Number(value || 0), 0),
     [saleEmptyWeights],
   )
-  const saleTotalCages = useMemo(() => {
-    if (saleSalePhase === "full") {
-      return saleFullWeights.reduce((sum, _, index) => {
-        const count = Number(saleLineCagesCounts[index] || saleCagesWeights[index] || 0)
-        return sum + (Number.isNaN(count) ? 0 : count)
-      }, 0)
-    }
-    return saleCagesWeights.reduce((sum, value) => sum + Number(value || 0), 0)
-  }, [saleSalePhase, saleFullWeights, saleLineCagesCounts, saleCagesWeights])
+
+  /** أقفاص مرحلة الأوزان الفارغة — ثابتة بعد «تم» */
+  const saleEmptyPhaseCages = useMemo(
+    () => saleCagesWeights.reduce((sum, value) => sum + Number(value || 0), 0),
+    [saleCagesWeights],
+  )
+
+  /** أقفاص الأوزان الممتلئة — تتغير مع كل سطر ممتلئ */
+  const saleFullPhaseCages = useMemo(
+    () => saleLineCagesCounts.reduce((sum, value) => sum + Number(value || 0), 0),
+    [saleLineCagesCounts],
+  )
 
   const saleTotalFullWeight = useMemo(
     () => saleFullWeights.reduce((sum, value) => sum + Number(value || 0), 0),
@@ -164,26 +171,30 @@ function App() {
 
   const saleWizardRows = useMemo(() => {
     if (saleSalePhase !== "full") return []
+    const totalEmpty = roundWeightKg(saleTotalEmptyWeight)
+    let emptyAssigned = false
     return saleFullWeights
       .map((full, index) => {
-        const emptyW = Number(saleEmptyWeights[index] ?? 0)
-        const fullW = Number(full || 0)
-        const cages = Number(saleLineCagesCounts[index] || saleCagesWeights[index] || 0)
+        const fullW = roundWeightKg(full)
+        if (fullW <= 0) return null
+        const cages = Number(saleLineCagesCounts[index] || 0)
+        const emptyW = !emptyAssigned && totalEmpty > 0 ? totalEmpty : 0
+        if (!emptyAssigned && totalEmpty > 0) emptyAssigned = true
         return {
           emptyWeight: emptyW,
           fullWeight: fullW,
           cages,
-          netWeight: Math.max(0, fullW - emptyW),
+          netWeight: Math.max(0, roundWeightKg(fullW - emptyW)),
         }
       })
-      .filter((row) => row.fullWeight > 0 || row.emptyWeight > 0)
-  }, [saleSalePhase, saleEmptyWeights, saleFullWeights, saleLineCagesCounts, saleCagesWeights])
+      .filter(Boolean)
+  }, [saleSalePhase, saleTotalEmptyWeight, saleFullWeights, saleLineCagesCounts])
 
   const saleEntriesComputed = saleWizardRows
 
   const saleTotalNetWeight = useMemo(
-    () => saleWizardRows.reduce((sum, entry) => sum + entry.netWeight, 0),
-    [saleWizardRows],
+    () => Math.max(0, roundWeightKg(saleTotalFullWeight - saleTotalEmptyWeight)),
+    [saleTotalFullWeight, saleTotalEmptyWeight],
   )
 
   const saleTotalPrice = useMemo(() => {
@@ -989,7 +1000,7 @@ function App() {
       return
     }
     setSaleFullWeights([""])
-    setSaleLineCagesCounts(saleCagesWeights.length ? [...saleCagesWeights] : [""])
+    setSaleLineCagesCounts([""])
     setSaleSalePhase("full")
     setError("")
   }
@@ -1018,7 +1029,14 @@ function App() {
     }
     const bad = rows.find((r) => r.fullWeight < r.emptyWeight)
     if (bad) {
-      setError("يجب أن يكون إجمالي الوزن الممتلئ أكبر من أو يساوي إجمالي الوزن الفارغ")
+      setError("يجب أن يكون الوزن الممتلئ أكبر من أو يساوي الوزن الفارغ في كل وزنة")
+      return
+    }
+    const computedNet = roundWeightKg(
+      rows.reduce((sum, r) => sum + r.fullWeight, 0) - rows.reduce((sum, r) => sum + r.emptyWeight, 0),
+    )
+    if (computedNet <= 0) {
+      setError("صافي الوزن يجب أن يكون أكبر من صفر")
       return
     }
     if (!saleTraderIdInput && !String(saleTraderInput || '').trim()) {
@@ -2004,7 +2022,8 @@ function App() {
           saleLineCagesCounts={saleLineCagesCounts}
           saleEntriesComputed={saleEntriesComputed}
           saleTotalEmptyWeight={saleTotalEmptyWeight}
-          saleTotalCages={saleTotalCages}
+          saleEmptyPhaseCages={saleEmptyPhaseCages}
+          saleFullPhaseCages={saleFullPhaseCages}
           saleTotalFullWeight={saleTotalFullWeight}
           saleTotalNetWeight={saleTotalNetWeight}
           saleTotalPrice={saleTotalPrice}

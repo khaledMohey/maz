@@ -381,7 +381,8 @@ function FarmPage({
   saleLineCagesCounts,
   saleEntriesComputed,
   saleTotalEmptyWeight,
-  saleTotalCages,
+  saleEmptyPhaseCages,
+  saleFullPhaseCages,
   saleTotalFullWeight,
   saleTotalNetWeight,
   saleTotalPrice,
@@ -3435,18 +3436,22 @@ function FarmPage({
                   إعادة تعيين الأوزان
                 </button>
               </div>
-              <div className="mb-3 grid gap-2 md:grid-cols-3">
+              <div className="mb-3 grid gap-2 md:grid-cols-2 lg:grid-cols-4">
                 <div className="rounded-xl border border-teal-100 bg-teal-50 px-4 py-3">
                   <span className="block text-sm font-semibold text-slate-600">إجمالي الوزن الفارغ</span>
                   <strong className="text-xl text-slate-900">{saleTotalEmptyWeight.toFixed(2)} كجم</strong>
                 </div>
                 <div className="rounded-xl border border-teal-100 bg-teal-50 px-4 py-3">
-                  <span className="block text-sm font-semibold text-slate-600">عدد الأقفاص</span>
-                  <strong className="text-xl text-slate-900">{saleTotalCages.toFixed(0)}</strong>
+                  <span className="block text-sm font-semibold text-slate-600">عدد الأقفاص (الفارغ)</span>
+                  <strong className="text-xl text-slate-900">{Number(saleEmptyPhaseCages || 0).toFixed(0)}</strong>
                 </div>
                 <div className="rounded-xl border border-teal-100 bg-teal-50 px-4 py-3">
                   <span className="block text-sm font-semibold text-slate-600">إجمالي الوزن الممتلئ</span>
                   <strong className="text-xl text-slate-900">{Number(saleTotalFullWeight || 0).toFixed(2)} كجم</strong>
+                </div>
+                <div className="rounded-xl border border-teal-100 bg-teal-50 px-4 py-3">
+                  <span className="block text-sm font-semibold text-slate-600">عدد أقفاص الأوزان الممتلئة</span>
+                  <strong className="text-xl text-slate-900">{Number(saleFullPhaseCages || 0).toFixed(0)}</strong>
                 </div>
               </div>
               <p className="mb-2 text-sm text-slate-600">
@@ -3469,8 +3474,8 @@ function FarmPage({
                     type="number"
                     min="0"
                     className="app-input w-24 shrink-0"
-                    placeholder="عدد الأقفاص"
-                    title="عدد الأقفاص في هذه الوزنة"
+                    placeholder="أقفاص الوزنة"
+                    title="عدد الأقفاص في هذه الوزنة الممتلئة"
                     value={saleLineCagesCounts[index] ?? ''}
                     onChange={(e) => onSaleLineCagesCountChange(index, e.target.value)}
                   />
@@ -3503,7 +3508,8 @@ function FarmPage({
               إجمالي السعر: <ColoredMoney value={saleTotalPrice} /> | المتبقي: <ColoredMoney value={saleRemaining} />
             </div>
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-lg font-semibold">
-              إجمالي الأقفاص: {saleTotalCages.toFixed(0)}
+              أقفاص فارغ: {Number(saleEmptyPhaseCages || 0).toFixed(0)} | أقفاص ممتلئ:{' '}
+              {Number(saleFullPhaseCages || 0).toFixed(0)}
             </div>
           </div>
           <button type="button" onClick={onAddSale} className="app-btn-primary mt-3">
